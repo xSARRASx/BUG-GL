@@ -23,8 +23,8 @@
 
   const STATUS_LABEL = { nontraite: "Pas traité", encours: "En cours", traite: "Traité" };
   const TYPE_LABEL = { bug: "🐞 Bug", amelioration: "✨ Amélioration", developpement: "🛠️ Développement" };
-  const PRIO_LABEL = { haute: "🔥 Haute", moyenne: "Moyenne", basse: "Basse" };
-  const PRIO_ORDER = { haute: 0, moyenne: 1, basse: 2 };
+  const PRIO_LABEL = { tres_urgente: "🚨 TRÈS URGENTE", haute: "🔥 Haute", moyenne: "Moyenne", basse: "Basse" };
+  const PRIO_ORDER = { tres_urgente: 0, haute: 1, moyenne: 2, basse: 3 };
 
   const AVATAR_COLORS = ["#6c5ce7", "#2ecc8f", "#ffa630", "#ff5c7a", "#00b8d9", "#e056fd"];
   const colorFor = (name) => {
@@ -262,7 +262,7 @@
       .map((p) => `<img src="${p}" data-full="${p}" alt="photo" />`).join("");
     const date = b.createdAt ? new Date(b.createdAt).toLocaleDateString("fr-FR") : "";
     return `
-      <article class="card s-${b.status}" data-id="${b.id}">
+      <article class="card s-${b.status} ${b.priority === "tres_urgente" ? "urgent" : ""}" data-id="${b.id}">
         <div class="card-top">
           <div class="badges">
             <span class="badge type-${b.type}">${TYPE_LABEL[b.type]}</span>
@@ -270,6 +270,7 @@
           </div>
         </div>
         <h3>${escapeHtml(b.title)}</h3>
+        ${b.listings ? `<div class="card-listings">🏠 ${escapeHtml(b.listings)}</div>` : ""}
         <p class="desc">${escapeHtml(b.description || "")}</p>
         ${photos.length ? `<div class="card-photos">${photoHtml}</div>` : ""}
         <div class="card-foot">
@@ -317,6 +318,7 @@
     setSeg("f-type", isEdit ? bug.type : "bug");
     setSeg("f-priority", isEdit ? bug.priority : "moyenne");
     setSeg("f-status", isEdit ? bug.status : "nontraite");
+    $("#f-listings").value = isEdit ? (bug.listings || "") : "";
     $("#f-client-name").value = isEdit ? (bug.clientName || "") : "";
     $("#f-client-email").value = isEdit ? (bug.clientEmail || "") : "";
     $("#f-client-phone").value = isEdit ? (bug.clientPhone || "") : "";
@@ -350,6 +352,9 @@
       </div>
       <h4 class="detail-label">Description</h4>
       <div class="detail-desc">${escapeHtml(bug.description || "")}</div>
+      ${bug.listings ? `
+        <h4 class="detail-label">🏠 Annonce(s) concernée(s)</h4>
+        <div class="detail-listings">${escapeHtml(bug.listings)}</div>` : ""}
       ${(bug.clientName || bug.clientEmail || bug.clientPhone) ? `
         <h4 class="detail-label">Client</h4>
         <div class="detail-client">
@@ -412,6 +417,7 @@
       type: getSeg("f-type"),
       priority: getSeg("f-priority"),
       status: getSeg("f-status"),
+      listings: $("#f-listings").value.trim(),
       clientName, clientEmail, clientPhone,
       photos: editingPhotos.reduce((acc, p) => { acc[uid()] = p; return acc; }, {}),
       updatedAt: Date.now(),

@@ -49,6 +49,7 @@
     </div>
     <div class="filter-group" id="filter-priority">
       <button class="chip active" data-priority="all">Toute gravité</button>
+      <button class="chip" data-priority="tres_urgente">🚨 Très urgente</button>
       <button class="chip" data-priority="haute">🔥 Haute</button>
       <button class="chip" data-priority="moyenne">Moyenne</button>
       <button class="chip" data-priority="basse">Basse</button>
@@ -91,7 +92,8 @@
           </div>
           <div class="field">
             <label>Priorité</label>
-            <div class="seg" id="f-priority">
+            <div class="seg seg-wrap" id="f-priority">
+              <button type="button" data-val="tres_urgente">🚨 TRÈS URGENTE</button>
               <button type="button" data-val="haute">🔥 Haute</button>
               <button type="button" data-val="moyenne" class="active">Moyenne</button>
               <button type="button" data-val="basse">Basse</button>
@@ -107,6 +109,11 @@
         <div class="field">
           <label for="f-desc">Description détaillée *</label>
           <textarea id="f-desc" rows="6" placeholder="Décris le bug le plus précisément possible :&#10;- Où ça se passe (page, écran)&#10;- Ce qui devrait se passer&#10;- Ce qui se passe réellement&#10;- Étapes pour reproduire" required></textarea>
+        </div>
+
+        <div class="field">
+          <label for="f-listings">🏠 Annonce(s) concernée(s) <span class="optional">(optionnel)</span></label>
+          <input type="text" id="f-listings" placeholder="Ex : Appartement Vieux-Port, Studio Bellecour…" />
         </div>
 
         <div class="client-box">

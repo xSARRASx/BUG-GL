@@ -178,9 +178,14 @@ input[type="search"] { min-width: 220px; }
 .badge.type-bug { background: rgba(255,92,122,0.15); color: var(--red); }
 .badge.type-amelioration { background: rgba(108,92,231,0.18); color: #a99bff; }
 .badge.type-developpement { background: rgba(0,184,217,0.16); color: #36d0e8; }
+.badge.prio-tres_urgente { background: var(--red); color: #fff; box-shadow: 0 0 0 1px rgba(255,92,122,0.4); }
 .badge.prio-haute { background: rgba(255,92,122,0.15); color: var(--red); }
 .badge.prio-moyenne { background: rgba(255,166,48,0.15); color: var(--orange); }
 .badge.prio-basse { background: rgba(154,160,189,0.15); color: var(--muted); }
+
+.card.urgent { border-left-color: var(--red); box-shadow: 0 0 0 1px rgba(255,92,122,0.35), 0 8px 24px rgba(255,92,122,0.12); }
+.card-listings { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; font-weight: 600; }
+.detail-listings { font-size: 15px; color: var(--text); margin-bottom: 22px; }
 
 .card h3 { font-size: 16px; font-weight: 700; margin: 12px 0 6px; line-height: 1.35; }
 .card .desc {
