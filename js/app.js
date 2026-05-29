@@ -22,7 +22,7 @@
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   const STATUS_LABEL = { nontraite: "Pas traité", encours: "En cours", traite: "Traité" };
-  const TYPE_LABEL = { bug: "🐞 Bug", amelioration: "✨ Amélioration" };
+  const TYPE_LABEL = { bug: "🐞 Bug", amelioration: "✨ Amélioration", developpement: "🛠️ Développement" };
   const PRIO_LABEL = { haute: "🔥 Haute", moyenne: "Moyenne", basse: "Basse" };
   const PRIO_ORDER = { haute: 0, moyenne: 1, basse: 2 };
 
