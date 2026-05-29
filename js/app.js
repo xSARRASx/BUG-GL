@@ -166,6 +166,7 @@
   let bugs = {};
   let filterStatus = "all";
   let filterType = "all";
+  let filterPriority = "all";
   let searchText = "";
   let sortMode = "recent";
   let editingPhotos = [];
@@ -179,6 +180,7 @@
 
     if (filterStatus !== "all") arr = arr.filter((b) => b.status === filterStatus);
     if (filterType !== "all") arr = arr.filter((b) => b.type === filterType);
+    if (filterPriority !== "all") arr = arr.filter((b) => b.priority === filterPriority);
     if (searchText) {
       const q = searchText.toLowerCase();
       arr = arr.filter((b) =>
@@ -235,10 +237,12 @@
   function resetFilters() {
     filterStatus = "all";
     filterType = "all";
+    filterPriority = "all";
     searchText = "";
     $("#search").value = "";
     $$("#filter-status .chip").forEach((x) => x.classList.toggle("active", x.dataset.status === "all"));
     $$("#filter-type .chip").forEach((x) => x.classList.toggle("active", x.dataset.type === "all"));
+    $$("#filter-priority .chip").forEach((x) => x.classList.toggle("active", x.dataset.priority === "all"));
     render();
   }
 
@@ -481,6 +485,10 @@
     $$("#filter-type .chip").forEach((c) => c.addEventListener("click", () => {
       $$("#filter-type .chip").forEach((x) => x.classList.remove("active"));
       c.classList.add("active"); filterType = c.dataset.type; render();
+    }));
+    $$("#filter-priority .chip").forEach((c) => c.addEventListener("click", () => {
+      $$("#filter-priority .chip").forEach((x) => x.classList.remove("active"));
+      c.classList.add("active"); filterPriority = c.dataset.priority; render();
     }));
     $("#search").addEventListener("input", (e) => { searchText = e.target.value; render(); });
     $("#sort").addEventListener("change", (e) => { sortMode = e.target.value; render(); });
