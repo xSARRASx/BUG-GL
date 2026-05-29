@@ -12,9 +12,9 @@
 
 window.emailConfig = {
   // --- À remplir après création du compte EmailJS ---
-  publicKey: "COLLE_ICI",
-  serviceId: "COLLE_ICI",
-  templateId: "COLLE_ICI",
+  publicKey: "FKbqzbrRz6RZZ1lvb",
+  serviceId: "service_fqs0q06",
+  templateId: "gel7mmc",
 
   // --- Adresses de l'équipe (déjà remplies) ---
   team: {
