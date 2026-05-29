@@ -324,6 +324,26 @@
     $$("#detail-body .detail-photos img").forEach((img) =>
       img.addEventListener("click", () => openLightbox(img.dataset.full)));
 
+    // Boutons de changement de statut rapide
+    const statuses = [
+      ["nontraite", "🔴 Pas traité"],
+      ["encours", "🟠 En cours"],
+      ["traite", "🟢 Traité"],
+    ];
+    $("#detail-status-actions").innerHTML = `
+      <span class="detail-status-label">Changer le statut :</span>
+      <div class="detail-status-btns">
+        ${statuses.map(([v, l]) =>
+          `<button type="button" class="status-btn ${v} ${bug.status === v ? "active" : ""}" data-status="${v}">${l}</button>`
+        ).join("")}
+      </div>`;
+    $$("#detail-status-actions .status-btn").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        const newStatus = btn.dataset.status;
+        store.update(detailBugId, { status: newStatus, updatedAt: Date.now(), updatedBy: me });
+        openDetail({ ...bug, status: newStatus }); // mise à jour visuelle immédiate
+      }));
+
     $("#detail-modal").classList.remove("hidden");
   }
 
