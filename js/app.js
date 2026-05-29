@@ -189,6 +189,11 @@
     }
 
     arr.sort((a, b) => {
+      // Les fiches traitées descendent toujours tout en bas de la liste
+      const at = a.status === "traite" ? 1 : 0;
+      const bt = b.status === "traite" ? 1 : 0;
+      if (at !== bt) return at - bt;
+      // Ensuite, le tri choisi s'applique normalement
       if (sortMode === "recent") return (b.createdAt || 0) - (a.createdAt || 0);
       if (sortMode === "ancien") return (a.createdAt || 0) - (b.createdAt || 0);
       if (sortMode === "priorite") return PRIO_ORDER[a.priority] - PRIO_ORDER[b.priority];
