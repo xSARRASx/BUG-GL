@@ -166,7 +166,12 @@ input[type="search"] { min-width: 220px; }
 .card:hover { background: var(--card-hover); transform: translateY(-2px); }
 .card.s-nontraite { border-left-color: var(--red); }
 .card.s-encours { border-left-color: var(--orange); }
-.card.s-traite { border-left-color: var(--green); opacity: 0.82; }
+.card.s-traite {
+  border-left-color: var(--green);
+  background: rgba(46, 204, 143, 0.10);
+  border-color: rgba(46, 204, 143, 0.32);
+}
+.card.s-traite:hover { background: rgba(46, 204, 143, 0.16); }
 
 .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .badges { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -183,7 +188,7 @@ input[type="search"] { min-width: 220px; }
 .badge.prio-moyenne { background: rgba(255,166,48,0.15); color: var(--orange); }
 .badge.prio-basse { background: rgba(154,160,189,0.15); color: var(--muted); }
 
-.card.urgent { border-left-color: var(--red); box-shadow: 0 0 0 1px rgba(255,92,122,0.35), 0 8px 24px rgba(255,92,122,0.12); }
+.card.urgent:not(.s-traite) { border-left-color: var(--red); box-shadow: 0 0 0 1px rgba(255,92,122,0.35), 0 8px 24px rgba(255,92,122,0.12); }
 .card-listings { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; font-weight: 600; }
 .detail-listings { font-size: 15px; color: var(--text); margin-bottom: 22px; }
 
