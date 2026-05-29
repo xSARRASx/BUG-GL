@@ -161,6 +161,54 @@
   }
 
   // -------------------------------------------------------------
+  //  Alertes par email (via EmailJS)
+  // -------------------------------------------------------------
+  function initEmail() {
+    if (window.emailActive && window.emailjs) {
+      try { window.emailjs.init({ publicKey: window.emailConfig.publicKey }); }
+      catch (e) { console.error("Init EmailJS impossible :", e); }
+    }
+  }
+
+  const TYPE_UPPER = { bug: "BUG", amelioration: "AMÉLIORATION", developpement: "DÉVELOPPEMENT" };
+
+  // kind : "new" (nouvelle fiche) ou "traite" (passée en traité)
+  function notify(kind, bug, actor) {
+    if (!window.emailActive || !window.emailjs) return;
+    const cfg = window.emailConfig;
+    let recipients = Object.entries(cfg.team || {});
+    if (!cfg.notifySelf) recipients = recipients.filter(([name]) => name !== actor);
+    if (recipients.length === 0) return;
+
+    const prio = PRIO_LABEL[bug.priority] || bug.priority;
+    let subject, message;
+    if (kind === "new") {
+      subject = `🆕 Nouveau ${TYPE_UPPER[bug.type] || "ÉLÉMENT"} — Priorité : ${prio}`;
+      message = `Une nouvelle fiche vient d'être ajoutée dans le suivi Guest Lucky.\n\n`
+        + `• Type : ${TYPE_UPPER[bug.type] || bug.type}\n`
+        + `• Priorité : ${prio}\n`
+        + `• Ajoutée par : ${actor}\n\n`
+        + `Connecte-toi à l'outil pour voir le détail :\nhttps://xsarrasx.github.io/BUG-GL/`;
+    } else {
+      subject = `✅ Une fiche a été traitée par ${actor}`;
+      message = `Une fiche vient d'être marquée comme TRAITÉE.\n\n`
+        + `• Type : ${TYPE_UPPER[bug.type] || bug.type}\n`
+        + `• Priorité : ${prio}\n`
+        + `• Traitée par : ${actor}\n\n`
+        + `Voir le suivi :\nhttps://xsarrasx.github.io/BUG-GL/`;
+    }
+
+    recipients.forEach(([name, email]) => {
+      window.emailjs.send(cfg.serviceId, cfg.templateId, {
+        to_email: email,
+        to_name: name,
+        subject,
+        message,
+      }).catch((e) => console.error("Échec envoi mail à " + email, e));
+    });
+  }
+
+  // -------------------------------------------------------------
   //  État de l'affichage
   // -------------------------------------------------------------
   let bugs = {};
@@ -392,6 +440,7 @@
       btn.addEventListener("click", () => {
         const newStatus = btn.dataset.status;
         store.update(detailBugId, { status: newStatus, updatedAt: Date.now(), updatedBy: me });
+        if (newStatus === "traite" && bug.status !== "traite") notify("traite", bug, me);
         closeDetail(); // on ferme et on revient à la liste
       }));
 
@@ -440,9 +489,12 @@
     }
 
     if (id) {
+      const wasTraite = bugs[id] && bugs[id].status === "traite";
       store.update(id, data);
+      if (data.status === "traite" && !wasTraite) notify("traite", data, me);
     } else {
       store.add({ ...data, createdAt: Date.now(), createdBy: me });
+      notify("new", data, me);
     }
     closeModal();
   }
@@ -540,6 +592,7 @@
   // -------------------------------------------------------------
   async function start() {
     await initStore();
+    initEmail();
     banner.classList.remove("hidden");
     wireEvents();
 
