@@ -172,6 +172,28 @@
 
   const TYPE_UPPER = { bug: "BUG", amelioration: "AMÉLIORATION", developpement: "DÉVELOPPEMENT" };
 
+  // Bouton « Test mail » : diagnostic visible à l'écran
+  function testMail() {
+    if (!window.emailActive) {
+      alert("⚠️ La configuration des mails n'est pas active (clés manquantes dans email-config.js).");
+      return;
+    }
+    if (!window.emailjs) {
+      alert("⚠️ La librairie d'envoi de mails n'est pas chargée.\n\nRecharge la page (idéalement en navigation privée : Cmd+Shift+N).");
+      return;
+    }
+    const cfg = window.emailConfig;
+    const dest = cfg.team[me] || "martinmorebkk@gmail.com";
+    window.emailjs.send(cfg.serviceId, cfg.templateId, {
+      to_email: dest,
+      to_name: me || "Test",
+      subject: "🔔 Test — Suivi Guest Lucky",
+      message: "Ceci est un mail de test. Si tu le reçois, les alertes fonctionnent ! 🎉",
+    })
+      .then(() => alert("✅ Mail de test ENVOYÉ à " + dest + "\n\nVérifie ta boîte de réception (et les spams)."))
+      .catch((e) => alert("❌ Échec de l'envoi :\n\n" + (e && (e.text || e.message) ? (e.text || e.message) : JSON.stringify(e))));
+  }
+
   // kind : "new" (nouvelle fiche) ou "traite" (passée en traité)
   function notify(kind, bug, actor) {
     if (!window.emailActive || !window.emailjs) return;
@@ -546,6 +568,7 @@
   // -------------------------------------------------------------
   function wireEvents() {
     $("#btn-add").addEventListener("click", () => openModal(null));
+    $("#btn-test-mail").addEventListener("click", testMail);
     $("#modal-close").addEventListener("click", closeModal);
     $("#btn-cancel").addEventListener("click", closeModal);
     $("#btn-delete").addEventListener("click", deleteBug);
