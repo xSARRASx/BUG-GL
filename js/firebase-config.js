@@ -2,25 +2,22 @@
 //  CONFIGURATION FIREBASE
 // =============================================================
 //
-//  👉 Tant que tu n'as RIEN changé ici, la page marche en
-//     "mode local" : elle fonctionne sur ton ordinateur mais
-//     les données ne sont PAS partagées avec ton père / Camille.
+//  ✅ Firebase est branché : la page fonctionne en TEMPS RÉEL
+//     partagé. Toute modif (statut, photo, nouvelle fiche) est
+//     visible par tout le monde en direct.
 //
-//  👉 Pour activer le PARTAGE EN TEMPS RÉEL, suis le guide
-//     dans le fichier GUIDE.md (étape par étape, très simple).
-//     Tu colleras les valeurs que Firebase te donne ci-dessous.
-//
-//  Remplace UNIQUEMENT les valeurs entre guillemets "...".
+//  Si un jour tu changes de projet Firebase, remplace les
+//     valeurs ci-dessous par celles données par Firebase.
 // =============================================================
 
 window.firebaseConfig = {
-  apiKey: "COLLE_ICI",
-  authDomain: "COLLE_ICI",
-  databaseURL: "COLLE_ICI",
-  projectId: "COLLE_ICI",
-  storageBucket: "COLLE_ICI",
-  messagingSenderId: "COLLE_ICI",
-  appId: "COLLE_ICI"
+  apiKey: "AIzaSyA9az_-bXlzb4vFvsvx8n8pHpqtFV76oRQ",
+  authDomain: "guestlucky-bugs.firebaseapp.com",
+  databaseURL: "https://guestlucky-bugs-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "guestlucky-bugs",
+  storageBucket: "guestlucky-bugs.firebasestorage.app",
+  messagingSenderId: "629553269666",
+  appId: "1:629553269666:web:6947c1751ca6cc2204c0fb"
 };
 
 // Ne touche pas à cette ligne : elle détecte automatiquement si
