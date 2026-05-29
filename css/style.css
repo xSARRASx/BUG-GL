@@ -285,7 +285,7 @@ input[type="search"] { min-width: 220px; }
 .field-row { display: flex; gap: 18px; }
 .field-row .field { flex: 1; }
 .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
-.field input[type="text"], .field textarea, .field input[type="text"]:focus, .field textarea:focus {
+.field input[type="text"], .field input[type="email"], .field textarea {
   width: 100%;
   background: var(--card);
   border: 1px solid var(--border);
@@ -295,6 +295,33 @@ input[type="search"] { min-width: 220px; }
   font-size: 14px; font-family: inherit;
   resize: vertical;
 }
+
+/* Boîte « Infos client » */
+.client-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+.client-box-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+.client-box .optional { color: var(--muted); font-weight: 500; }
+.client-box .field { margin-bottom: 12px; }
+.client-box .field:last-child, .client-box .field-row { margin-bottom: 0; }
+.client-box .field-row { gap: 12px; }
+
+/* Affichage client dans « Voir » */
+.detail-client {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 22px;
+  display: flex; flex-direction: column; gap: 8px;
+  font-size: 14px;
+}
+.detail-client a { color: #a99bff; text-decoration: none; }
+.detail-client a:hover { text-decoration: underline; }
 .field input:focus, .field textarea:focus { outline: none; border-color: var(--primary); }
 .hint { color: var(--muted); font-size: 12px; display: block; margin-top: 6px; }
 

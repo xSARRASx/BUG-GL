@@ -317,6 +317,9 @@
     setSeg("f-type", isEdit ? bug.type : "bug");
     setSeg("f-priority", isEdit ? bug.priority : "moyenne");
     setSeg("f-status", isEdit ? bug.status : "nontraite");
+    $("#f-client-name").value = isEdit ? (bug.clientName || "") : "";
+    $("#f-client-email").value = isEdit ? (bug.clientEmail || "") : "";
+    $("#f-client-phone").value = isEdit ? (bug.clientPhone || "") : "";
     editingPhotos = isEdit && bug.photos ? Object.values(bug.photos) : [];
     renderPhotosPreview();
     $("#btn-delete").classList.toggle("hidden", !isEdit);
@@ -347,6 +350,13 @@
       </div>
       <h4 class="detail-label">Description</h4>
       <div class="detail-desc">${escapeHtml(bug.description || "")}</div>
+      ${(bug.clientName || bug.clientEmail || bug.clientPhone) ? `
+        <h4 class="detail-label">Client</h4>
+        <div class="detail-client">
+          ${bug.clientName ? `<div>👤 ${escapeHtml(bug.clientName)}</div>` : ""}
+          ${bug.clientEmail ? `<div>✉️ <a href="mailto:${escapeHtml(bug.clientEmail)}">${escapeHtml(bug.clientEmail)}</a></div>` : ""}
+          ${bug.clientPhone ? `<div>📞 <a href="tel:${escapeHtml(bug.clientPhone)}">${escapeHtml(bug.clientPhone)}</a></div>` : ""}
+        </div>` : ""}
       ${photos.length ? `
         <h4 class="detail-label">Photos</h4>
         <div class="detail-photos">${photos.map((p) => `<img src="${p}" data-full="${p}" alt="photo" />`).join("")}</div>` : ""}
@@ -393,17 +403,30 @@
   function submitForm(ev) {
     ev.preventDefault();
     const id = $("#f-id").value;
+    const clientName = $("#f-client-name").value.trim();
+    const clientEmail = $("#f-client-email").value.trim();
+    const clientPhone = $("#f-client-phone").value.trim();
     const data = {
       title: $("#f-title").value.trim(),
       description: $("#f-desc").value.trim(),
       type: getSeg("f-type"),
       priority: getSeg("f-priority"),
       status: getSeg("f-status"),
+      clientName, clientEmail, clientPhone,
       photos: editingPhotos.reduce((acc, p) => { acc[uid()] = p; return acc; }, {}),
       updatedAt: Date.now(),
       updatedBy: me,
     };
     if (!data.title || !data.description) return;
+
+    // Aucune info client renseignée -> on demande confirmation
+    if (!clientName && !clientEmail && !clientPhone) {
+      const ok = confirm(
+        "Vous n'avez renseigné aucune info client (nom, email, téléphone).\n\n" +
+        "Êtes-vous sûr de vouloir enregistrer cette fiche quand même ?"
+      );
+      if (!ok) return;
+    }
 
     if (id) {
       store.update(id, data);
