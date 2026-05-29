@@ -337,9 +337,11 @@ input[type="search"] { min-width: 220px; }
 
 .seg { display: flex; gap: 8px; flex-wrap: wrap; }
 .seg button {
-  flex: 1; min-width: 80px;
+  flex: 1 1 0; min-width: 90px;
+  display: flex; align-items: center; justify-content: center; text-align: center;
   background: var(--card); border: 1px solid var(--border); color: var(--muted);
-  padding: 10px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  padding: 10px 8px; border-radius: 9px; font-size: 13px; font-weight: 600;
+  line-height: 1.25; white-space: normal;
   cursor: pointer; font-family: inherit; transition: all 0.15s;
 }
 .seg button.active { background: var(--primary); border-color: var(--primary); color: #fff; }
