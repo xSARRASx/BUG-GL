@@ -20,7 +20,8 @@ window.emailConfig = {
   team: {
     "Martin Moré": "martinmorebkk@gmail.com",
     "Sébastien Moré": "moresebastien@gmail.com",
-    "Camille Fauveau": "camillefauveau.service@gmail.com"
+    "Camille Fauveau": "camillefauveau.service@gmail.com",
+    "Kevin": ""  // ⬅️ email à compléter plus tard
   },
 
   // Recevoir aussi un mail pour ses PROPRES actions ? (false = non)

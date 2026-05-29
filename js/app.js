@@ -177,6 +177,7 @@
     if (!window.emailActive || !window.emailjs) return;
     const cfg = window.emailConfig;
     let recipients = Object.entries(cfg.team || {});
+    recipients = recipients.filter(([, email]) => email && email.trim()); // ignore les personnes sans email
     if (!cfg.notifySelf) recipients = recipients.filter(([name]) => name !== actor);
     if (recipients.length === 0) return;
 
