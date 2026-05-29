@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Suivi des bugs &amp; améliorations — Guest Lucky</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- Bandeau d'état (mode local / connecté) -->
+  <div id="status-banner" class="status-banner hidden"></div>
+
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo">🐞</div>
+      <div>
+        <h1>Suivi des bugs &amp; améliorations</h1>
+        <p class="subtitle">Guest Lucky — Channel Manager</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div id="presence" class="presence" title="Personnes connectées"></div>
+      <div id="me" class="me"></div>
+      <button id="btn-add" class="btn btn-primary">+ Nouveau</button>
+    </div>
+  </header>
+
+  <!-- Barre de statistiques -->
+  <section class="stats" id="stats"></section>
+
+  <!-- Filtres -->
+  <section class="filters">
+    <div class="filter-group" id="filter-status">
+      <button class="chip active" data-status="all">Tous</button>
+      <button class="chip" data-status="nontraite">🔴 Pas traité</button>
+      <button class="chip" data-status="encours">🟠 En cours</button>
+      <button class="chip" data-status="traite">🟢 Traité</button>
+    </div>
+    <div class="filter-group" id="filter-type">
+      <button class="chip active" data-type="all">Tout type</button>
+      <button class="chip" data-type="bug">🐞 Bugs</button>
+      <button class="chip" data-type="amelioration">✨ Améliorations</button>
+    </div>
+    <div class="filter-group">
+      <input type="search" id="search" placeholder="🔎 Rechercher…" />
+      <select id="sort">
+        <option value="recent">Plus récents</option>
+        <option value="ancien">Plus anciens</option>
+        <option value="priorite">Priorité</option>
+      </select>
+    </div>
+  </section>
+
+  <!-- Liste des fiches -->
+  <main id="list" class="list"></main>
+  <div id="empty" class="empty hidden">
+    <p>Aucune fiche pour l'instant.</p>
+    <button class="btn btn-primary" onclick="document.getElementById('btn-add').click()">Créer la première fiche</button>
+  </div>
+
+  <!-- Modale d'ajout / édition -->
+  <div id="modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="modal-title">Nouvelle fiche</h2>
+        <button class="modal-close" id="modal-close">&times;</button>
+      </div>
+      <form id="form" class="modal-body">
+        <input type="hidden" id="f-id" />
+
+        <div class="field-row">
+          <div class="field">
+            <label>Type</label>
+            <div class="seg" id="f-type">
+              <button type="button" data-val="bug" class="active">🐞 Bug</button>
+              <button type="button" data-val="amelioration">✨ Amélioration</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Priorité</label>
+            <div class="seg" id="f-priority">
+              <button type="button" data-val="haute">🔥 Haute</button>
+              <button type="button" data-val="moyenne" class="active">Moyenne</button>
+              <button type="button" data-val="basse">Basse</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-title">Titre *</label>
+          <input type="text" id="f-title" placeholder="Ex : Le bouton « Réserver » ne réagit pas sur mobile" required />
+        </div>
+
+        <div class="field">
+          <label for="f-desc">Description détaillée *</label>
+          <textarea id="f-desc" rows="6" placeholder="Décris le bug le plus précisément possible :&#10;- Où ça se passe (page, écran)&#10;- Ce qui devrait se passer&#10;- Ce qui se passe réellement&#10;- Étapes pour reproduire" required></textarea>
+        </div>
+
+        <div class="field">
+          <label>Photos / captures d'écran</label>
+          <div class="photos-input">
+            <label class="photo-add" for="f-photos">📷 Ajouter des photos</label>
+            <input type="file" id="f-photos" accept="image/*" multiple hidden />
+            <div id="f-photos-preview" class="photos-preview"></div>
+          </div>
+          <small class="hint">Les images sont automatiquement compressées. Tu peux en ajouter plusieurs.</small>
+        </div>
+
+        <div class="field">
+          <label>Statut</label>
+          <div class="seg" id="f-status">
+            <button type="button" data-val="nontraite" class="active">🔴 Pas traité</button>
+            <button type="button" data-val="encours">🟠 En cours</button>
+            <button type="button" data-val="traite">🟢 Traité</button>
+          </div>
+        </div>
+
+        <div class="modal-foot">
+          <button type="button" id="btn-delete" class="btn btn-danger hidden">Supprimer</button>
+          <div class="spacer"></div>
+          <button type="button" id="btn-cancel" class="btn btn-ghost">Annuler</button>
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modale d'identité -->
+  <div id="who-modal" class="modal-overlay hidden">
+    <div class="modal modal-small">
+      <div class="modal-head"><h2>Qui es-tu ?</h2></div>
+      <div class="modal-body">
+        <p class="who-intro">Choisis ton nom pour que tout le monde voie qui modifie quoi.</p>
+        <div class="who-buttons" id="who-buttons">
+          <button data-name="Martin Moret">Martin Moret</button>
+          <button data-name="Sébastien Moret">Sébastien Moret</button>
+          <button data-name="Camille">Camille</button>
+        </div>
+        <div class="field">
+          <label for="who-other">…ou un autre nom</label>
+          <input type="text" id="who-other" placeholder="Ton nom" />
+        </div>
+        <div class="modal-foot">
+          <div class="spacer"></div>
+          <button id="who-ok" class="btn btn-primary">C'est parti</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Visionneuse de photo plein écran -->
+  <div id="lightbox" class="lightbox hidden"><img id="lightbox-img" src="" alt="" /></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
