@@ -14,7 +14,7 @@ window.emailConfig = {
   // --- À remplir après création du compte EmailJS ---
   publicKey: "FKbqzbrRz6RZZ1lvb",
   serviceId: "service_fqs0q06",
-  templateId: "gel7mmc",
+  templateId: "template_9lfbree",
 
   // --- Adresses de l'équipe (déjà remplies) ---
   team: {
