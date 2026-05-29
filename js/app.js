@@ -568,7 +568,6 @@
   // -------------------------------------------------------------
   function wireEvents() {
     $("#btn-add").addEventListener("click", () => openModal(null));
-    $("#btn-test-mail").addEventListener("click", testMail);
     $("#modal-close").addEventListener("click", closeModal);
     $("#btn-cancel").addEventListener("click", closeModal);
     $("#btn-delete").addEventListener("click", deleteBug);
