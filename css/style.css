@@ -206,6 +206,38 @@ input[type="search"] { min-width: 220px; }
 .status-pill.encours { background: rgba(255,166,48,0.14); color: var(--orange); }
 .status-pill.traite { background: rgba(46,204,143,0.14); color: var(--green); }
 
+.card-actions { display: flex; gap: 8px; margin-top: 14px; }
+.btn-card {
+  flex: 1;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 9px;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  transition: all 0.15s;
+}
+.btn-card:hover { border-color: var(--primary); background: var(--card-hover); }
+
+/* Fenêtre de lecture (Voir) */
+.detail-badges { margin-bottom: 20px; }
+.detail-label {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--muted); margin-bottom: 8px; margin-top: 4px;
+}
+.detail-desc {
+  white-space: pre-wrap; line-height: 1.65; font-size: 15px; color: var(--text);
+  margin-bottom: 22px;
+}
+.detail-photos { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+.detail-photos img {
+  width: 130px; height: 130px; object-fit: cover; border-radius: 10px;
+  border: 1px solid var(--border); cursor: zoom-in;
+}
+.detail-meta { color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); padding-top: 16px; }
+.detail-foot { padding: 0 24px 24px; }
+
 .empty { text-align: center; padding: 80px 20px; color: var(--muted); }
 .empty p { margin-bottom: 18px; font-size: 16px; }
 

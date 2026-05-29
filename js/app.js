@@ -201,7 +201,10 @@
     $$(".card").forEach((el) => {
       el.addEventListener("click", (ev) => {
         if (ev.target.closest(".card-photos img")) return;
-        openModal(bugs[el.dataset.id]);
+        const bug = bugs[el.dataset.id];
+        const actBtn = ev.target.closest("[data-act]");
+        if (actBtn && actBtn.dataset.act === "edit") openModal(bug);
+        else openDetail(bug);
       });
     });
     $$(".card-photos img").forEach((img) => {
@@ -241,6 +244,10 @@
         <div class="card-foot">
           <span>${b.createdBy ? "par " + escapeHtml(b.createdBy) : ""} ${date ? "· " + date : ""}</span>
           <span class="status-pill ${b.status}">${STATUS_LABEL[b.status]}</span>
+        </div>
+        <div class="card-actions">
+          <button type="button" class="btn-card" data-act="view">👁 Voir</button>
+          <button type="button" class="btn-card" data-act="edit">✏️ Modifier</button>
         </div>
       </article>`;
   }
@@ -287,6 +294,40 @@
   }
 
   function closeModal() { $("#modal").classList.add("hidden"); }
+
+  // -------------------------------------------------------------
+  //  Fenêtre de lecture (Voir) — affiche tout en entier
+  // -------------------------------------------------------------
+  let detailBugId = null;
+
+  function openDetail(bug) {
+    if (!bug) return;
+    detailBugId = bug.id;
+    const photos = bug.photos ? Object.values(bug.photos) : [];
+    const date = bug.createdAt
+      ? new Date(bug.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
+      : "";
+    $("#detail-title").textContent = bug.title;
+    $("#detail-body").innerHTML = `
+      <div class="badges detail-badges">
+        <span class="badge type-${bug.type}">${TYPE_LABEL[bug.type]}</span>
+        <span class="badge prio-${bug.priority}">${PRIO_LABEL[bug.priority]}</span>
+        <span class="status-pill ${bug.status}">${STATUS_LABEL[bug.status]}</span>
+      </div>
+      <h4 class="detail-label">Description</h4>
+      <div class="detail-desc">${escapeHtml(bug.description || "")}</div>
+      ${photos.length ? `
+        <h4 class="detail-label">Photos</h4>
+        <div class="detail-photos">${photos.map((p) => `<img src="${p}" data-full="${p}" alt="photo" />`).join("")}</div>` : ""}
+      <div class="detail-meta">${bug.createdBy ? "Créé par " + escapeHtml(bug.createdBy) : ""}${date ? " · le " + date : ""}</div>`;
+
+    $$("#detail-body .detail-photos img").forEach((img) =>
+      img.addEventListener("click", () => openLightbox(img.dataset.full)));
+
+    $("#detail-modal").classList.remove("hidden");
+  }
+
+  function closeDetail() { $("#detail-modal").classList.add("hidden"); }
 
   async function handlePhotoUpload(ev) {
     const files = Array.from(ev.target.files || []);
@@ -375,6 +416,11 @@
     $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
 
     $("#lightbox").addEventListener("click", () => $("#lightbox").classList.add("hidden"));
+
+    // Fenêtre de lecture (Voir)
+    $("#detail-close").addEventListener("click", closeDetail);
+    $("#detail-edit").addEventListener("click", () => { closeDetail(); openModal(bugs[detailBugId]); });
+    $("#detail-modal").addEventListener("click", (e) => { if (e.target.id === "detail-modal") closeDetail(); });
 
     ["f-type", "f-priority", "f-status"].forEach((gid) => {
       $$(`#${gid} button`).forEach((btn) =>

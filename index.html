@@ -155,6 +155,22 @@
     </div>
   </div>
 
+  <!-- Fenêtre de lecture (Voir) -->
+  <div id="detail-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="detail-title">Détail</h2>
+        <button class="modal-close" id="detail-close">&times;</button>
+      </div>
+      <div class="modal-body" id="detail-body"></div>
+      <div class="modal-foot detail-foot">
+        <div class="spacer"></div>
+        <button type="button" class="btn btn-ghost" id="detail-close-2" onclick="document.getElementById('detail-close').click()">Fermer</button>
+        <button type="button" class="btn btn-primary" id="detail-edit">✏️ Modifier</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Visionneuse de photo plein écran -->
   <div id="lightbox" class="lightbox hidden"><img id="lightbox-img" src="" alt="" /></div>
 
