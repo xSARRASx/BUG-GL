@@ -13,7 +13,7 @@
 //  Remplace UNIQUEMENT les valeurs entre guillemets "...".
 // =============================================================
 
-export const firebaseConfig = {
+window.firebaseConfig = {
   apiKey: "COLLE_ICI",
   authDomain: "COLLE_ICI",
   databaseURL: "COLLE_ICI",
@@ -25,4 +25,4 @@ export const firebaseConfig = {
 
 // Ne touche pas à cette ligne : elle détecte automatiquement si
 // tu as déjà branché Firebase ou si on reste en mode local.
-export const firebaseActive = !Object.values(firebaseConfig).includes("COLLE_ICI");
+window.firebaseActive = !Object.values(window.firebaseConfig).includes("COLLE_ICI");

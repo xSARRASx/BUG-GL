@@ -3,421 +3,424 @@
 //  Fonctionne en 2 modes :
 //   - Mode LOCAL (par défaut) : données dans le navigateur.
 //   - Mode FIREBASE : temps réel partagé (voir GUIDE.md).
+//
+//  NOTE : ce fichier est un script "classique" (pas un module)
+//  pour qu'il fonctionne même en double-cliquant sur index.html.
 // =============================================================
 
-import { firebaseConfig, firebaseActive } from "./firebase-config.js";
+(function () {
+  "use strict";
 
-// ---------------------------------------------------------------
-//  Petits utilitaires
-// ---------------------------------------------------------------
-const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => Array.from(document.querySelectorAll(sel));
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-const escapeHtml = (s) =>
-  String(s).replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // -------------------------------------------------------------
+  //  Petits utilitaires
+  // -------------------------------------------------------------
+  const $ = (sel) => document.querySelector(sel);
+  const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const escapeHtml = (s) =>
+    String(s).replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-const STATUS_LABEL = { nontraite: "Pas traité", encours: "En cours", traite: "Traité" };
-const TYPE_LABEL = { bug: "🐞 Bug", amelioration: "✨ Amélioration" };
-const PRIO_LABEL = { haute: "🔥 Haute", moyenne: "Moyenne", basse: "Basse" };
-const PRIO_ORDER = { haute: 0, moyenne: 1, basse: 2 };
+  const STATUS_LABEL = { nontraite: "Pas traité", encours: "En cours", traite: "Traité" };
+  const TYPE_LABEL = { bug: "🐞 Bug", amelioration: "✨ Amélioration" };
+  const PRIO_LABEL = { haute: "🔥 Haute", moyenne: "Moyenne", basse: "Basse" };
+  const PRIO_ORDER = { haute: 0, moyenne: 1, basse: 2 };
 
-const AVATAR_COLORS = ["#6c5ce7", "#2ecc8f", "#ffa630", "#ff5c7a", "#00b8d9", "#e056fd"];
-const colorFor = (name) => {
-  let h = 0;
-  for (const ch of name) h = ch.charCodeAt(0) + ((h << 5) - h);
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
-};
-const initials = (name) =>
-  name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+  const AVATAR_COLORS = ["#6c5ce7", "#2ecc8f", "#ffa630", "#ff5c7a", "#00b8d9", "#e056fd"];
+  const colorFor = (name) => {
+    let h = 0;
+    for (const ch of name) h = ch.charCodeAt(0) + ((h << 5) - h);
+    return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+  };
+  const initials = (name) =>
+    name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 
-// Compression d'image dans le navigateur -> dataURL légère
-function compressImage(file, maxSize = 1200, quality = 0.72) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = reject;
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = reject;
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > maxSize || height > maxSize) {
-          const ratio = Math.min(maxSize / width, maxSize / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", quality));
+  // Compression d'image dans le navigateur -> dataURL légère
+  function compressImage(file, maxSize = 1200, quality = 0.72) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = reject;
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxSize || height > maxSize) {
+            const ratio = Math.min(maxSize / width, maxSize / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.src = reader.result;
       };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
+      reader.readAsDataURL(file);
+    });
+  }
 
-// ---------------------------------------------------------------
-//  Identité de l'utilisateur (qui modifie ?)
-// ---------------------------------------------------------------
-let me = localStorage.getItem("bugtracker_user") || "";
+  // -------------------------------------------------------------
+  //  Identité de l'utilisateur (qui modifie ?)
+  // -------------------------------------------------------------
+  let me = localStorage.getItem("bugtracker_user") || "";
 
-// ---------------------------------------------------------------
-//  Couche de stockage : LocalStore ou FirebaseStore
-//  Interface commune : subscribe(cb), add(bug), update(id, patch),
-//  remove(id), + présence (Firebase uniquement).
-// ---------------------------------------------------------------
-class LocalStore {
-  constructor() {
-    this.key = "bugtracker_data";
-    this.listeners = [];
+  // -------------------------------------------------------------
+  //  Couche de stockage : LocalStore ou FirebaseStore
+  // -------------------------------------------------------------
+  class LocalStore {
+    constructor() {
+      this.key = "bugtracker_data";
+      this.listeners = [];
+    }
+    _read() {
+      try { return JSON.parse(localStorage.getItem(this.key)) || {}; }
+      catch { return {}; }
+    }
+    _write(data) {
+      localStorage.setItem(this.key, JSON.stringify(data));
+      this._emit();
+    }
+    _emit() { this.listeners.forEach((cb) => cb(this._read())); }
+    subscribe(cb) { this.listeners.push(cb); cb(this._read()); }
+    add(bug) { const d = this._read(); const id = uid(); d[id] = { ...bug, id }; this._write(d); }
+    update(id, patch) { const d = this._read(); if (d[id]) { d[id] = { ...d[id], ...patch }; this._write(d); } }
+    remove(id) { const d = this._read(); delete d[id]; this._write(d); }
+    setPresence() {}
+    subscribePresence() {}
   }
-  _read() {
-    try { return JSON.parse(localStorage.getItem(this.key)) || {}; }
-    catch { return {}; }
-  }
-  _write(data) {
-    localStorage.setItem(this.key, JSON.stringify(data));
-    this._emit();
-  }
-  _emit() { this.listeners.forEach((cb) => cb(this._read())); }
-  subscribe(cb) { this.listeners.push(cb); cb(this._read()); }
-  add(bug) { const d = this._read(); const id = uid(); d[id] = { ...bug, id }; this._write(d); }
-  update(id, patch) { const d = this._read(); if (d[id]) { d[id] = { ...d[id], ...patch }; this._write(d); } }
-  remove(id) { const d = this._read(); delete d[id]; this._write(d); }
-  // Présence non disponible en local
-  setPresence() {}
-  subscribePresence() {}
-}
 
-class FirebaseStore {
-  constructor(db, fns) { this.db = db; this.fns = fns; }
-  subscribe(cb) {
-    const { ref, onValue } = this.fns;
-    onValue(ref(this.db, "bugs"), (snap) => cb(snap.val() || {}));
-  }
-  add(bug) {
-    const { ref, push, set } = this.fns;
-    const r = push(ref(this.db, "bugs"));
-    set(r, { ...bug, id: r.key });
-  }
-  update(id, patch) {
-    const { ref, update } = this.fns;
-    update(ref(this.db, "bugs/" + id), patch);
-  }
-  remove(id) {
-    const { ref, remove } = this.fns;
-    remove(ref(this.db, "bugs/" + id));
-  }
-  setPresence(name) {
-    const { ref, push, set, onDisconnect, serverTimestamp } = this.fns;
-    const r = push(ref(this.db, "presence"));
-    set(r, { name, at: serverTimestamp() });
-    onDisconnect(r).remove();
-    this._presenceRef = r;
-  }
-  subscribePresence(cb) {
-    const { ref, onValue } = this.fns;
-    onValue(ref(this.db, "presence"), (snap) => cb(snap.val() || {}));
-  }
-}
-
-// ---------------------------------------------------------------
-//  Initialisation du stockage
-// ---------------------------------------------------------------
-let store;
-const banner = $("#status-banner");
-
-async function initStore() {
-  if (firebaseActive) {
-    try {
-      const appMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-      const dbMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js");
-      const app = appMod.initializeApp(firebaseConfig);
-      const db = dbMod.getDatabase(app);
-      const fns = {
-        ref: dbMod.ref, onValue: dbMod.onValue, push: dbMod.push,
-        set: dbMod.set, update: dbMod.update, remove: dbMod.remove,
-        onDisconnect: dbMod.onDisconnect, serverTimestamp: dbMod.serverTimestamp,
-      };
-      store = new FirebaseStore(db, fns);
-      banner.className = "status-banner live";
-      banner.textContent = "🟢 Connecté en temps réel — tout le monde voit les mêmes données.";
-      return;
-    } catch (e) {
-      console.error(e);
-      banner.className = "status-banner error";
-      banner.textContent = "⚠️ Connexion Firebase impossible. Vérifie ta config (voir GUIDE.md). On reste en mode local.";
-      store = new LocalStore();
-      return;
+  class FirebaseStore {
+    constructor(db, fns) { this.db = db; this.fns = fns; }
+    subscribe(cb) {
+      const { ref, onValue } = this.fns;
+      onValue(ref(this.db, "bugs"), (snap) => cb(snap.val() || {}));
+    }
+    add(bug) {
+      const { ref, push, set } = this.fns;
+      const r = push(ref(this.db, "bugs"));
+      set(r, { ...bug, id: r.key });
+    }
+    update(id, patch) {
+      const { ref, update } = this.fns;
+      update(ref(this.db, "bugs/" + id), patch);
+    }
+    remove(id) {
+      const { ref, remove } = this.fns;
+      remove(ref(this.db, "bugs/" + id));
+    }
+    setPresence(name) {
+      const { ref, push, set, onDisconnect, serverTimestamp } = this.fns;
+      const r = push(ref(this.db, "presence"));
+      set(r, { name, at: serverTimestamp() });
+      onDisconnect(r).remove();
+      this._presenceRef = r;
+    }
+    subscribePresence(cb) {
+      const { ref, onValue } = this.fns;
+      onValue(ref(this.db, "presence"), (snap) => cb(snap.val() || {}));
     }
   }
-  store = new LocalStore();
-  banner.className = "status-banner local";
-  banner.textContent = "💡 Mode local : les données restent sur cet ordinateur (non partagées). Branche Firebase pour le partage — voir GUIDE.md.";
-}
 
-// ---------------------------------------------------------------
-//  État de l'affichage
-// ---------------------------------------------------------------
-let bugs = {};
-let filterStatus = "all";
-let filterType = "all";
-let searchText = "";
-let sortMode = "recent";
-let editingPhotos = []; // dataURLs en cours d'édition dans la modale
+  // -------------------------------------------------------------
+  //  Initialisation du stockage
+  // -------------------------------------------------------------
+  let store;
+  const banner = $("#status-banner");
 
-// ---------------------------------------------------------------
-//  Rendu
-// ---------------------------------------------------------------
-function render() {
-  const list = $("#list");
-  let arr = Object.values(bugs);
-
-  if (filterStatus !== "all") arr = arr.filter((b) => b.status === filterStatus);
-  if (filterType !== "all") arr = arr.filter((b) => b.type === filterType);
-  if (searchText) {
-    const q = searchText.toLowerCase();
-    arr = arr.filter((b) =>
-      (b.title || "").toLowerCase().includes(q) ||
-      (b.description || "").toLowerCase().includes(q));
+  async function initStore() {
+    if (window.firebaseActive) {
+      try {
+        // Import dynamique du SDK Firebase (uniquement si configuré)
+        const appMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+        const dbMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js");
+        const app = appMod.initializeApp(window.firebaseConfig);
+        const db = dbMod.getDatabase(app);
+        const fns = {
+          ref: dbMod.ref, onValue: dbMod.onValue, push: dbMod.push,
+          set: dbMod.set, update: dbMod.update, remove: dbMod.remove,
+          onDisconnect: dbMod.onDisconnect, serverTimestamp: dbMod.serverTimestamp,
+        };
+        store = new FirebaseStore(db, fns);
+        banner.className = "status-banner live";
+        banner.textContent = "🟢 Connecté en temps réel — tout le monde voit les mêmes données.";
+        return;
+      } catch (e) {
+        console.error(e);
+        banner.className = "status-banner error";
+        banner.textContent = "⚠️ Connexion Firebase impossible. Vérifie ta config (voir GUIDE.md). On reste en mode local.";
+        store = new LocalStore();
+        return;
+      }
+    }
+    store = new LocalStore();
+    banner.className = "status-banner local";
+    banner.textContent = "💡 Mode local : les données restent sur cet ordinateur (non partagées). Branche Firebase pour le partage — voir GUIDE.md.";
   }
 
-  arr.sort((a, b) => {
-    if (sortMode === "recent") return (b.createdAt || 0) - (a.createdAt || 0);
-    if (sortMode === "ancien") return (a.createdAt || 0) - (b.createdAt || 0);
-    if (sortMode === "priorite") return PRIO_ORDER[a.priority] - PRIO_ORDER[b.priority];
-    return 0;
-  });
+  // -------------------------------------------------------------
+  //  État de l'affichage
+  // -------------------------------------------------------------
+  let bugs = {};
+  let filterStatus = "all";
+  let filterType = "all";
+  let searchText = "";
+  let sortMode = "recent";
+  let editingPhotos = [];
 
-  renderStats();
+  // -------------------------------------------------------------
+  //  Rendu
+  // -------------------------------------------------------------
+  function render() {
+    const list = $("#list");
+    let arr = Object.values(bugs);
 
-  $("#empty").classList.toggle("hidden", Object.keys(bugs).length !== 0);
-  list.innerHTML = arr.map(cardHtml).join("");
+    if (filterStatus !== "all") arr = arr.filter((b) => b.status === filterStatus);
+    if (filterType !== "all") arr = arr.filter((b) => b.type === filterType);
+    if (searchText) {
+      const q = searchText.toLowerCase();
+      arr = arr.filter((b) =>
+        (b.title || "").toLowerCase().includes(q) ||
+        (b.description || "").toLowerCase().includes(q));
+    }
 
-  // Clic sur une carte -> édition
-  $$(".card").forEach((el) => {
-    el.addEventListener("click", (ev) => {
-      if (ev.target.closest(".card-photos img")) return;
-      openModal(bugs[el.dataset.id]);
+    arr.sort((a, b) => {
+      if (sortMode === "recent") return (b.createdAt || 0) - (a.createdAt || 0);
+      if (sortMode === "ancien") return (a.createdAt || 0) - (b.createdAt || 0);
+      if (sortMode === "priorite") return PRIO_ORDER[a.priority] - PRIO_ORDER[b.priority];
+      return 0;
     });
-  });
-  // Clic sur miniature -> lightbox
-  $$(".card-photos img").forEach((img) => {
-    img.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      openLightbox(img.dataset.full);
+
+    renderStats();
+
+    $("#empty").classList.toggle("hidden", Object.keys(bugs).length !== 0);
+    list.innerHTML = arr.map(cardHtml).join("");
+
+    $$(".card").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        if (ev.target.closest(".card-photos img")) return;
+        openModal(bugs[el.dataset.id]);
+      });
     });
-  });
-}
+    $$(".card-photos img").forEach((img) => {
+      img.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        openLightbox(img.dataset.full);
+      });
+    });
+  }
 
-function renderStats() {
-  const arr = Object.values(bugs);
-  const nb = (s) => arr.filter((b) => b.status === s).length;
-  $("#stats").innerHTML = `
-    <div class="stat-card"><div class="num">${arr.length}</div><div class="lbl">Total</div></div>
-    <div class="stat-card red"><div class="num">${nb("nontraite")}</div><div class="lbl">🔴 Pas traité</div></div>
-    <div class="stat-card orange"><div class="num">${nb("encours")}</div><div class="lbl">🟠 En cours</div></div>
-    <div class="stat-card green"><div class="num">${nb("traite")}</div><div class="lbl">🟢 Traité</div></div>`;
-}
+  function renderStats() {
+    const arr = Object.values(bugs);
+    const nb = (s) => arr.filter((b) => b.status === s).length;
+    $("#stats").innerHTML = `
+      <div class="stat-card"><div class="num">${arr.length}</div><div class="lbl">Total</div></div>
+      <div class="stat-card red"><div class="num">${nb("nontraite")}</div><div class="lbl">🔴 Pas traité</div></div>
+      <div class="stat-card orange"><div class="num">${nb("encours")}</div><div class="lbl">🟠 En cours</div></div>
+      <div class="stat-card green"><div class="num">${nb("traite")}</div><div class="lbl">🟢 Traité</div></div>`;
+  }
 
-function cardHtml(b) {
-  const photos = b.photos ? Object.values(b.photos) : [];
-  const photoHtml = photos.slice(0, 4)
-    .map((p) => `<img src="${p}" data-full="${p}" alt="photo" />`).join("");
-  const date = b.createdAt ? new Date(b.createdAt).toLocaleDateString("fr-FR") : "";
-  return `
-    <article class="card s-${b.status}" data-id="${b.id}">
-      <div class="card-top">
-        <div class="badges">
-          <span class="badge type-${b.type}">${TYPE_LABEL[b.type]}</span>
-          <span class="badge prio-${b.priority}">${PRIO_LABEL[b.priority]}</span>
+  function cardHtml(b) {
+    const photos = b.photos ? Object.values(b.photos) : [];
+    const photoHtml = photos.slice(0, 4)
+      .map((p) => `<img src="${p}" data-full="${p}" alt="photo" />`).join("");
+    const date = b.createdAt ? new Date(b.createdAt).toLocaleDateString("fr-FR") : "";
+    return `
+      <article class="card s-${b.status}" data-id="${b.id}">
+        <div class="card-top">
+          <div class="badges">
+            <span class="badge type-${b.type}">${TYPE_LABEL[b.type]}</span>
+            <span class="badge prio-${b.priority}">${PRIO_LABEL[b.priority]}</span>
+          </div>
         </div>
-      </div>
-      <h3>${escapeHtml(b.title)}</h3>
-      <p class="desc">${escapeHtml(b.description || "")}</p>
-      ${photos.length ? `<div class="card-photos">${photoHtml}</div>` : ""}
-      <div class="card-foot">
-        <span>${b.createdBy ? "par " + escapeHtml(b.createdBy) : ""} ${date ? "· " + date : ""}</span>
-        <span class="status-pill ${b.status}">${STATUS_LABEL[b.status]}</span>
-      </div>
-    </article>`;
-}
-
-// ---------------------------------------------------------------
-//  Modale d'ajout / édition
-// ---------------------------------------------------------------
-function setSeg(groupId, val) {
-  $$(`#${groupId} button`).forEach((btn) =>
-    btn.classList.toggle("active", btn.dataset.val === val));
-}
-function getSeg(groupId) {
-  const active = $(`#${groupId} button.active`);
-  return active ? active.dataset.val : null;
-}
-
-function renderPhotosPreview() {
-  $("#f-photos-preview").innerHTML = editingPhotos.map((p, i) => `
-    <div class="photo-thumb">
-      <img src="${p}" alt="photo" />
-      <button type="button" class="rm" data-i="${i}">&times;</button>
-    </div>`).join("");
-  $$("#f-photos-preview .rm").forEach((btn) =>
-    btn.addEventListener("click", () => {
-      editingPhotos.splice(Number(btn.dataset.i), 1);
-      renderPhotosPreview();
-    }));
-}
-
-function openModal(bug) {
-  const isEdit = !!bug;
-  $("#modal-title").textContent = isEdit ? "Modifier la fiche" : "Nouvelle fiche";
-  $("#f-id").value = isEdit ? bug.id : "";
-  $("#f-title").value = isEdit ? bug.title : "";
-  $("#f-desc").value = isEdit ? bug.description : "";
-  setSeg("f-type", isEdit ? bug.type : "bug");
-  setSeg("f-priority", isEdit ? bug.priority : "moyenne");
-  setSeg("f-status", isEdit ? bug.status : "nontraite");
-  editingPhotos = isEdit && bug.photos ? Object.values(bug.photos) : [];
-  renderPhotosPreview();
-  $("#btn-delete").classList.toggle("hidden", !isEdit);
-  $("#modal").classList.remove("hidden");
-  $("#f-title").focus();
-}
-
-function closeModal() { $("#modal").classList.add("hidden"); }
-
-async function handlePhotoUpload(ev) {
-  const files = Array.from(ev.target.files || []);
-  for (const file of files) {
-    try { editingPhotos.push(await compressImage(file)); }
-    catch (e) { console.error("Image illisible", e); }
+        <h3>${escapeHtml(b.title)}</h3>
+        <p class="desc">${escapeHtml(b.description || "")}</p>
+        ${photos.length ? `<div class="card-photos">${photoHtml}</div>` : ""}
+        <div class="card-foot">
+          <span>${b.createdBy ? "par " + escapeHtml(b.createdBy) : ""} ${date ? "· " + date : ""}</span>
+          <span class="status-pill ${b.status}">${STATUS_LABEL[b.status]}</span>
+        </div>
+      </article>`;
   }
-  renderPhotosPreview();
-  ev.target.value = "";
-}
 
-function submitForm(ev) {
-  ev.preventDefault();
-  const id = $("#f-id").value;
-  const data = {
-    title: $("#f-title").value.trim(),
-    description: $("#f-desc").value.trim(),
-    type: getSeg("f-type"),
-    priority: getSeg("f-priority"),
-    status: getSeg("f-status"),
-    photos: editingPhotos.reduce((acc, p) => { acc[uid()] = p; return acc; }, {}),
-    updatedAt: Date.now(),
-    updatedBy: me,
-  };
-  if (!data.title || !data.description) return;
-
-  if (id) {
-    store.update(id, data);
-  } else {
-    store.add({ ...data, createdAt: Date.now(), createdBy: me });
+  // -------------------------------------------------------------
+  //  Modale d'ajout / édition
+  // -------------------------------------------------------------
+  function setSeg(groupId, val) {
+    $$(`#${groupId} button`).forEach((btn) =>
+      btn.classList.toggle("active", btn.dataset.val === val));
   }
-  closeModal();
-}
+  function getSeg(groupId) {
+    const active = $(`#${groupId} button.active`);
+    return active ? active.dataset.val : null;
+  }
 
-function deleteBug() {
-  const id = $("#f-id").value;
-  if (id && confirm("Supprimer définitivement cette fiche ?")) {
-    store.remove(id);
+  function renderPhotosPreview() {
+    $("#f-photos-preview").innerHTML = editingPhotos.map((p, i) => `
+      <div class="photo-thumb">
+        <img src="${p}" alt="photo" />
+        <button type="button" class="rm" data-i="${i}">&times;</button>
+      </div>`).join("");
+    $$("#f-photos-preview .rm").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        editingPhotos.splice(Number(btn.dataset.i), 1);
+        renderPhotosPreview();
+      }));
+  }
+
+  function openModal(bug) {
+    const isEdit = !!bug;
+    $("#modal-title").textContent = isEdit ? "Modifier la fiche" : "Nouvelle fiche";
+    $("#f-id").value = isEdit ? bug.id : "";
+    $("#f-title").value = isEdit ? bug.title : "";
+    $("#f-desc").value = isEdit ? bug.description : "";
+    setSeg("f-type", isEdit ? bug.type : "bug");
+    setSeg("f-priority", isEdit ? bug.priority : "moyenne");
+    setSeg("f-status", isEdit ? bug.status : "nontraite");
+    editingPhotos = isEdit && bug.photos ? Object.values(bug.photos) : [];
+    renderPhotosPreview();
+    $("#btn-delete").classList.toggle("hidden", !isEdit);
+    $("#modal").classList.remove("hidden");
+    $("#f-title").focus();
+  }
+
+  function closeModal() { $("#modal").classList.add("hidden"); }
+
+  async function handlePhotoUpload(ev) {
+    const files = Array.from(ev.target.files || []);
+    for (const file of files) {
+      try { editingPhotos.push(await compressImage(file)); }
+      catch (e) { console.error("Image illisible", e); }
+    }
+    renderPhotosPreview();
+    ev.target.value = "";
+  }
+
+  function submitForm(ev) {
+    ev.preventDefault();
+    const id = $("#f-id").value;
+    const data = {
+      title: $("#f-title").value.trim(),
+      description: $("#f-desc").value.trim(),
+      type: getSeg("f-type"),
+      priority: getSeg("f-priority"),
+      status: getSeg("f-status"),
+      photos: editingPhotos.reduce((acc, p) => { acc[uid()] = p; return acc; }, {}),
+      updatedAt: Date.now(),
+      updatedBy: me,
+    };
+    if (!data.title || !data.description) return;
+
+    if (id) {
+      store.update(id, data);
+    } else {
+      store.add({ ...data, createdAt: Date.now(), createdBy: me });
+    }
     closeModal();
   }
-}
 
-// ---------------------------------------------------------------
-//  Lightbox
-// ---------------------------------------------------------------
-function openLightbox(src) {
-  $("#lightbox-img").src = src;
-  $("#lightbox").classList.remove("hidden");
-}
+  function deleteBug() {
+    const id = $("#f-id").value;
+    if (id && confirm("Supprimer définitivement cette fiche ?")) {
+      store.remove(id);
+      closeModal();
+    }
+  }
 
-// ---------------------------------------------------------------
-//  Présence (qui est connecté)
-// ---------------------------------------------------------------
-function renderPresence(presence) {
-  const names = [...new Set(Object.values(presence).map((p) => p.name))];
-  $("#presence").innerHTML = names.map((n) =>
-    `<div class="avatar" style="background:${colorFor(n)}" title="${escapeHtml(n)}">${initials(n)}</div>`
-  ).join("");
-}
+  // -------------------------------------------------------------
+  //  Lightbox
+  // -------------------------------------------------------------
+  function openLightbox(src) {
+    $("#lightbox-img").src = src;
+    $("#lightbox").classList.remove("hidden");
+  }
 
-// ---------------------------------------------------------------
-//  Identité
-// ---------------------------------------------------------------
-function askIdentity() {
-  $("#who-modal").classList.remove("hidden");
-}
-function setIdentity(name) {
-  if (!name) return;
-  me = name;
-  localStorage.setItem("bugtracker_user", name);
-  $("#me").innerHTML = `Connecté en tant que <b>${escapeHtml(name)}</b>`;
-  $("#who-modal").classList.add("hidden");
-  if (store.setPresence) store.setPresence(name);
-}
+  // -------------------------------------------------------------
+  //  Présence (qui est connecté)
+  // -------------------------------------------------------------
+  function renderPresence(presence) {
+    const names = [...new Set(Object.values(presence).map((p) => p.name))];
+    $("#presence").innerHTML = names.map((n) =>
+      `<div class="avatar" style="background:${colorFor(n)}" title="${escapeHtml(n)}">${initials(n)}</div>`
+    ).join("");
+  }
 
-// ---------------------------------------------------------------
-//  Branchement des événements
-// ---------------------------------------------------------------
-function wireEvents() {
-  $("#btn-add").addEventListener("click", () => openModal(null));
-  $("#modal-close").addEventListener("click", closeModal);
-  $("#btn-cancel").addEventListener("click", closeModal);
-  $("#btn-delete").addEventListener("click", deleteBug);
-  $("#form").addEventListener("submit", submitForm);
-  $("#f-photos").addEventListener("change", handlePhotoUpload);
-  $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
+  // -------------------------------------------------------------
+  //  Identité
+  // -------------------------------------------------------------
+  function askIdentity() {
+    $("#who-modal").classList.remove("hidden");
+  }
+  function setIdentity(name) {
+    if (!name) return;
+    me = name;
+    localStorage.setItem("bugtracker_user", name);
+    $("#me").innerHTML = `Connecté en tant que <b>${escapeHtml(name)}</b>`;
+    $("#who-modal").classList.add("hidden");
+    if (store && store.setPresence) store.setPresence(name);
+  }
 
-  $("#lightbox").addEventListener("click", () => $("#lightbox").classList.add("hidden"));
+  // -------------------------------------------------------------
+  //  Branchement des événements
+  // -------------------------------------------------------------
+  function wireEvents() {
+    $("#btn-add").addEventListener("click", () => openModal(null));
+    $("#modal-close").addEventListener("click", closeModal);
+    $("#btn-cancel").addEventListener("click", closeModal);
+    $("#btn-delete").addEventListener("click", deleteBug);
+    $("#form").addEventListener("submit", submitForm);
+    $("#f-photos").addEventListener("change", handlePhotoUpload);
+    $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
 
-  // Boutons segmentés (type / priorité / statut) dans la modale
-  ["f-type", "f-priority", "f-status"].forEach((gid) => {
-    $$(`#${gid} button`).forEach((btn) =>
-      btn.addEventListener("click", () => setSeg(gid, btn.dataset.val)));
-  });
+    $("#lightbox").addEventListener("click", () => $("#lightbox").classList.add("hidden"));
 
-  // Filtres
-  $$("#filter-status .chip").forEach((c) => c.addEventListener("click", () => {
-    $$("#filter-status .chip").forEach((x) => x.classList.remove("active"));
-    c.classList.add("active"); filterStatus = c.dataset.status; render();
-  }));
-  $$("#filter-type .chip").forEach((c) => c.addEventListener("click", () => {
-    $$("#filter-type .chip").forEach((x) => x.classList.remove("active"));
-    c.classList.add("active"); filterType = c.dataset.type; render();
-  }));
-  $("#search").addEventListener("input", (e) => { searchText = e.target.value; render(); });
-  $("#sort").addEventListener("change", (e) => { sortMode = e.target.value; render(); });
+    ["f-type", "f-priority", "f-status"].forEach((gid) => {
+      $$(`#${gid} button`).forEach((btn) =>
+        btn.addEventListener("click", () => setSeg(gid, btn.dataset.val)));
+    });
 
-  // Identité
-  $$("#who-buttons button").forEach((b) =>
-    b.addEventListener("click", () => setIdentity(b.dataset.name)));
-  $("#who-ok").addEventListener("click", () => {
-    const other = $("#who-other").value.trim();
-    if (other) setIdentity(other);
-  });
-}
+    $$("#filter-status .chip").forEach((c) => c.addEventListener("click", () => {
+      $$("#filter-status .chip").forEach((x) => x.classList.remove("active"));
+      c.classList.add("active"); filterStatus = c.dataset.status; render();
+    }));
+    $$("#filter-type .chip").forEach((c) => c.addEventListener("click", () => {
+      $$("#filter-type .chip").forEach((x) => x.classList.remove("active"));
+      c.classList.add("active"); filterType = c.dataset.type; render();
+    }));
+    $("#search").addEventListener("input", (e) => { searchText = e.target.value; render(); });
+    $("#sort").addEventListener("change", (e) => { sortMode = e.target.value; render(); });
 
-// ---------------------------------------------------------------
-//  Démarrage
-// ---------------------------------------------------------------
-async function start() {
-  await initStore();
-  banner.classList.remove("hidden");
-  wireEvents();
+    $$("#who-buttons button").forEach((b) =>
+      b.addEventListener("click", () => setIdentity(b.dataset.name)));
+    $("#who-ok").addEventListener("click", () => {
+      const other = $("#who-other").value.trim();
+      if (other) setIdentity(other);
+    });
+  }
 
-  store.subscribe((data) => { bugs = data || {}; render(); });
-  if (store.subscribePresence) store.subscribePresence(renderPresence);
+  // -------------------------------------------------------------
+  //  Démarrage
+  // -------------------------------------------------------------
+  async function start() {
+    await initStore();
+    banner.classList.remove("hidden");
+    wireEvents();
 
-  if (me) setIdentity(me);
-  else askIdentity();
+    store.subscribe((data) => { bugs = data || {}; render(); });
+    if (store.subscribePresence) store.subscribePresence(renderPresence);
 
-  render();
-}
+    if (me) setIdentity(me);
+    else askIdentity();
 
-start();
+    render();
+  }
+
+  // On attend que la page soit prête avant de démarrer.
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+})();
