@@ -195,8 +195,25 @@
 
     renderStats();
 
-    $("#empty").classList.toggle("hidden", Object.keys(bugs).length !== 0);
+    const total = Object.keys(bugs).length;
+    const emptyEl = $("#empty");
+    if (arr.length === 0) {
+      if (total === 0) {
+        emptyEl.innerHTML = `<p>Aucune fiche pour l'instant.</p>
+          <button class="btn btn-primary" onclick="document.getElementById('btn-add').click()">Créer la première fiche</button>`;
+      } else {
+        emptyEl.innerHTML = `<p>Aucun résultat ne correspond à ta recherche ou à tes filtres.</p>
+          <button class="btn btn-ghost" id="reset-filters">Réinitialiser la recherche et les filtres</button>`;
+      }
+      emptyEl.classList.remove("hidden");
+    } else {
+      emptyEl.classList.add("hidden");
+    }
+
     list.innerHTML = arr.map(cardHtml).join("");
+
+    const resetBtn = $("#reset-filters");
+    if (resetBtn) resetBtn.addEventListener("click", resetFilters);
 
     $$(".card").forEach((el) => {
       el.addEventListener("click", (ev) => {
@@ -213,6 +230,16 @@
         openLightbox(img.dataset.full);
       });
     });
+  }
+
+  function resetFilters() {
+    filterStatus = "all";
+    filterType = "all";
+    searchText = "";
+    $("#search").value = "";
+    $$("#filter-status .chip").forEach((x) => x.classList.toggle("active", x.dataset.status === "all"));
+    $$("#filter-type .chip").forEach((x) => x.classList.toggle("active", x.dataset.type === "all"));
+    render();
   }
 
   function renderStats() {
