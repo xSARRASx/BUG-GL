@@ -341,7 +341,7 @@
       btn.addEventListener("click", () => {
         const newStatus = btn.dataset.status;
         store.update(detailBugId, { status: newStatus, updatedAt: Date.now(), updatedBy: me });
-        openDetail({ ...bug, status: newStatus }); // mise à jour visuelle immédiate
+        closeDetail(); // on ferme et on revient à la liste
       }));
 
     $("#detail-modal").classList.remove("hidden");
