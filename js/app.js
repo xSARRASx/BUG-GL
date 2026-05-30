@@ -568,6 +568,7 @@
   // -------------------------------------------------------------
   function wireEvents() {
     $("#btn-add").addEventListener("click", () => openModal(null));
+    $("#btn-switch").addEventListener("click", askIdentity);
     $("#modal-close").addEventListener("click", closeModal);
     $("#btn-cancel").addEventListener("click", closeModal);
     $("#btn-delete").addEventListener("click", deleteBug);
