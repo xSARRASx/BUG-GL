@@ -517,7 +517,6 @@
       if (data.status === "traite" && !wasTraite) notify("traite", data, me);
     } else {
       store.add({ ...data, createdAt: Date.now(), createdBy: me });
-      notify("new", data, me);
     }
     closeModal();
   }
