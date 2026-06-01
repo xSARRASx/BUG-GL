@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=5" />
+  <link rel="stylesheet" href="css/style.css?v=6" />
 </head>
 <body>
   <!-- Bandeau d'état (mode local / connecté) -->
@@ -192,6 +192,11 @@
       </div>
       <div class="modal-body" id="detail-body"></div>
       <div class="modal-foot detail-foot">
+        <div class="detail-comment-box">
+          <label for="detail-comment">💬 Commentaire / réponse <span class="optional">(ajouté au mail de résolution)</span></label>
+          <textarea id="detail-comment" rows="3" placeholder="Ex : Résolu côté Beds24, la synchro fonctionne de nouveau.&#10;Réponse au client : ..."></textarea>
+          <button type="button" class="btn btn-ghost" id="detail-save-comment">💾 Enregistrer le commentaire</button>
+        </div>
         <div id="detail-status-actions" class="detail-status-actions"></div>
         <div class="detail-foot-end">
           <button type="button" class="btn btn-ghost" onclick="document.getElementById('detail-close').click()">↩ Retour</button>
@@ -205,8 +210,8 @@
   <div id="lightbox" class="lightbox hidden"><img id="lightbox-img" src="" alt="" /></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-  <script src="js/firebase-config.js?v=5"></script>
-  <script src="js/email-config.js?v=5"></script>
-  <script src="js/app.js?v=5"></script>
+  <script src="js/firebase-config.js?v=6"></script>
+  <script src="js/email-config.js?v=6"></script>
+  <script src="js/app.js?v=6"></script>
 </body>
 </html>

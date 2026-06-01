@@ -242,8 +242,9 @@
         + `• Ticket : ${tick}\n`
         + `• Type : ${TYPE_UPPER[bug.type] || bug.type}\n`
         + `• Priorité : ${prio}\n`
-        + `• Traitée par : ${actor}\n\n`
-        + `Pour la retrouver : tape "${tick}" dans la barre de recherche de l'outil.\n`
+        + `• Traitée par : ${actor}\n`
+        + (bug.comment ? `\n💬 Commentaire / réponse :\n${bug.comment}\n` : "")
+        + `\nPour la retrouver : tape "${tick}" dans la barre de recherche de l'outil.\n`
         + `https://xsarrasx.github.io/BUG-GL/`;
     }
 
@@ -507,6 +508,9 @@
     $$("#detail-body .detail-photos img").forEach((img) =>
       img.addEventListener("click", () => openLightbox(img.dataset.full)));
 
+    // Commentaire / réponse (pré-rempli avec l'existant)
+    $("#detail-comment").value = bug.comment || "";
+
     // Boutons de changement de statut rapide
     const statuses = [
       ["nontraite", "🔴 Pas traité"],
@@ -523,8 +527,9 @@
     $$("#detail-status-actions .status-btn").forEach((btn) =>
       btn.addEventListener("click", () => {
         const newStatus = btn.dataset.status;
-        store.update(detailBugId, { status: newStatus, updatedAt: Date.now(), updatedBy: me });
-        if (newStatus === "traite" && bug.status !== "traite") notify("traite", bug, me);
+        const comment = $("#detail-comment").value.trim();
+        store.update(detailBugId, { status: newStatus, comment, updatedAt: Date.now(), updatedBy: me });
+        if (newStatus === "traite" && bug.status !== "traite") notify("traite", { ...bug, status: newStatus, comment }, me);
         closeDetail(); // on ferme et on revient à la liste
       }));
 
@@ -642,6 +647,14 @@
     // Fenêtre de lecture (Voir)
     $("#detail-close").addEventListener("click", closeDetail);
     $("#detail-edit").addEventListener("click", () => { closeDetail(); openModal(bugs[detailBugId]); });
+    $("#detail-save-comment").addEventListener("click", () => {
+      const comment = $("#detail-comment").value.trim();
+      store.update(detailBugId, { comment, updatedAt: Date.now(), updatedBy: me });
+      const btn = $("#detail-save-comment");
+      const old = btn.textContent;
+      btn.textContent = "✅ Commentaire enregistré";
+      setTimeout(() => { btn.textContent = old; }, 1500);
+    });
     $("#detail-modal").addEventListener("click", (e) => { if (e.target.id === "detail-modal") closeDetail(); });
 
     ["f-type", "f-priority", "f-status"].forEach((gid) => {
