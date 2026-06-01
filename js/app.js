@@ -21,6 +21,9 @@
     String(s).replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  // Numéro de ticket lisible : 7 -> "#007"
+  const fmtTicket = (n) => (n ? "#" + String(n).padStart(3, "0") : "");
+
   const STATUS_LABEL = { nontraite: "Pas traité", encours: "En cours", traite: "Traité" };
   const TYPE_LABEL = { bug: "🐞 Bug", amelioration: "✨ Amélioration", developpement: "🛠️ Développement" };
   const PRIO_LABEL = { tres_urgente: "🚨 TRÈS URGENTE", haute: "🔥 Haute", moyenne: "Moyenne", basse: "Basse" };
@@ -213,12 +216,15 @@
         + `• Ajoutée par : ${actor}\n\n`
         + `Connecte-toi à l'outil pour voir le détail :\nhttps://xsarrasx.github.io/BUG-GL/`;
     } else {
-      subject = `✅ Une fiche a été traitée par ${actor}`;
+      const tick = fmtTicket(bug.ticket);
+      subject = `✅ Ticket ${tick} traité par ${actor}`;
       message = `Une fiche vient d'être marquée comme TRAITÉE.\n\n`
+        + `• Ticket : ${tick}\n`
         + `• Type : ${TYPE_UPPER[bug.type] || bug.type}\n`
         + `• Priorité : ${prio}\n`
         + `• Traitée par : ${actor}\n\n`
-        + `Voir le suivi :\nhttps://xsarrasx.github.io/BUG-GL/`;
+        + `Pour la retrouver : tape "${tick}" dans la barre de recherche de l'outil.\n`
+        + `https://xsarrasx.github.io/BUG-GL/`;
     }
 
     recipients.forEach(([name, email]) => {
@@ -245,6 +251,21 @@
   // -------------------------------------------------------------
   //  Rendu
   // -------------------------------------------------------------
+  // Prochain numéro de ticket disponible
+  function nextTicket() {
+    const nums = Object.values(bugs).map((b) => b.ticket || 0);
+    return (nums.length ? Math.max(...nums) : 0) + 1;
+  }
+
+  // Attribue un numéro aux anciennes fiches qui n'en ont pas (une seule fois)
+  function maybeBackfillTickets() {
+    const missing = Object.values(bugs).filter((b) => !b.ticket);
+    if (missing.length === 0) return;
+    let max = Math.max(0, ...Object.values(bugs).map((b) => b.ticket || 0));
+    missing.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    missing.forEach((b) => { max += 1; store.update(b.id, { ticket: max }); });
+  }
+
   function render() {
     const list = $("#list");
     let arr = Object.values(bugs);
@@ -253,10 +274,14 @@
     if (filterType !== "all") arr = arr.filter((b) => b.type === filterType);
     if (filterPriority !== "all") arr = arr.filter((b) => b.priority === filterPriority);
     if (searchText) {
-      const q = searchText.toLowerCase();
-      arr = arr.filter((b) =>
-        (b.title || "").toLowerCase().includes(q) ||
-        (b.description || "").toLowerCase().includes(q));
+      const q = searchText.toLowerCase().trim();
+      arr = arr.filter((b) => {
+        const hay = [
+          b.title, b.description, b.listings,
+          fmtTicket(b.ticket), "#" + (b.ticket || ""), b.ticket || ""
+        ].join(" ").toLowerCase();
+        return hay.includes(q);
+      });
     }
 
     arr.sort((a, b) => {
@@ -341,6 +366,7 @@
       <article class="card s-${b.status} ${b.priority === "tres_urgente" ? "urgent" : ""}" data-id="${b.id}">
         <div class="card-top">
           <div class="badges">
+            ${b.ticket ? `<span class="ticket">${fmtTicket(b.ticket)}</span>` : ""}
             <span class="badge type-${b.type}">${TYPE_LABEL[b.type]}</span>
             <span class="badge prio-${b.priority}">${PRIO_LABEL[b.priority]}</span>
           </div>
@@ -419,7 +445,7 @@
     const date = bug.createdAt
       ? new Date(bug.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
       : "";
-    $("#detail-title").textContent = bug.title;
+    $("#detail-title").textContent = (bug.ticket ? fmtTicket(bug.ticket) + " · " : "") + bug.title;
     $("#detail-body").innerHTML = `
       <div class="badges detail-badges">
         <span class="badge type-${bug.type}">${TYPE_LABEL[bug.type]}</span>
@@ -514,9 +540,9 @@
     if (id) {
       const wasTraite = bugs[id] && bugs[id].status === "traite";
       store.update(id, data);
-      if (data.status === "traite" && !wasTraite) notify("traite", data, me);
+      if (data.status === "traite" && !wasTraite) notify("traite", { ...bugs[id], ...data }, me);
     } else {
-      store.add({ ...data, createdAt: Date.now(), createdBy: me });
+      store.add({ ...data, ticket: nextTicket(), createdAt: Date.now(), createdBy: me });
     }
     closeModal();
   }
@@ -619,7 +645,7 @@
     banner.classList.remove("hidden");
     wireEvents();
 
-    store.subscribe((data) => { bugs = data || {}; render(); });
+    store.subscribe((data) => { bugs = data || {}; maybeBackfillTickets(); render(); });
     if (store.subscribePresence) store.subscribePresence(renderPresence);
 
     if (me) setIdentity(me);

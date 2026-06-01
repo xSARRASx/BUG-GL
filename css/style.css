@@ -174,7 +174,13 @@ input[type="search"] { min-width: 220px; }
 .card.s-traite:hover { background: rgba(46, 204, 143, 0.16); }
 
 .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
-.badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.ticket {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.5px;
+  padding: 4px 8px; border-radius: 6px;
+  background: var(--bg-soft); color: var(--text);
+  border: 1px solid var(--border);
+}
 .badge {
   font-size: 11px; font-weight: 700;
   padding: 4px 9px; border-radius: 6px;
