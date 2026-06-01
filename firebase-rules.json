@@ -2,12 +2,13 @@
   "rules": {
     "bugs": {
       ".read": true,
-      ".write": true,
-      "$bugId": {
-        ".validate": "newData.hasChildren(['title', 'type', 'status']) || !newData.exists()"
-      }
+      ".write": true
     },
     "presence": {
+      ".read": true,
+      ".write": true
+    },
+    "meta": {
       ".read": true,
       ".write": true
     }

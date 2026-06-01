@@ -91,6 +91,13 @@
     add(bug) { const d = this._read(); const id = uid(); d[id] = { ...bug, id }; this._write(d); }
     update(id, patch) { const d = this._read(); if (d[id]) { d[id] = { ...d[id], ...patch }; this._write(d); } }
     remove(id) { const d = this._read(); delete d[id]; this._write(d); }
+    async reserveTicket(floor = 0) {
+      const key = "bugtracker_lastTicket";
+      const cur = parseInt(localStorage.getItem(key) || "0", 10);
+      const n = Math.max(cur, floor) + 1;
+      localStorage.setItem(key, String(n));
+      return n;
+    }
     setPresence() {}
     subscribePresence() {}
   }
@@ -113,6 +120,18 @@
     remove(id) {
       const { ref, remove } = this.fns;
       remove(ref(this.db, "bugs/" + id));
+    }
+    // Compteur central atomique : garantit un numéro unique et toujours croissant
+    async reserveTicket(floor = 0) {
+      const { ref, runTransaction } = this.fns;
+      try {
+        const res = await runTransaction(ref(this.db, "meta/lastTicket"),
+          (cur) => Math.max(cur || 0, floor) + 1);
+        return res.snapshot.val();
+      } catch (e) {
+        console.error("Compteur indisponible (règles ?), repli sur max+1 :", e);
+        return floor + 1;
+      }
     }
     setPresence(name) {
       const { ref, push, set, onDisconnect, serverTimestamp } = this.fns;
@@ -145,6 +164,7 @@
           ref: dbMod.ref, onValue: dbMod.onValue, push: dbMod.push,
           set: dbMod.set, update: dbMod.update, remove: dbMod.remove,
           onDisconnect: dbMod.onDisconnect, serverTimestamp: dbMod.serverTimestamp,
+          runTransaction: dbMod.runTransaction,
         };
         store = new FirebaseStore(db, fns);
         banner.className = "status-banner live";
@@ -251,19 +271,27 @@
   // -------------------------------------------------------------
   //  Rendu
   // -------------------------------------------------------------
-  // Prochain numéro de ticket disponible
-  function nextTicket() {
-    const nums = Object.values(bugs).map((b) => b.ticket || 0);
-    return (nums.length ? Math.max(...nums) : 0) + 1;
+  // Plus grand numéro déjà attribué (sert de plancher au compteur)
+  function maxTicket() {
+    return Math.max(0, ...Object.values(bugs).map((b) => b.ticket || 0));
   }
 
   // Attribue un numéro aux anciennes fiches qui n'en ont pas (une seule fois)
-  function maybeBackfillTickets() {
+  let backfilling = false;
+  async function maybeBackfillTickets() {
+    if (backfilling) return;
     const missing = Object.values(bugs).filter((b) => !b.ticket);
     if (missing.length === 0) return;
-    let max = Math.max(0, ...Object.values(bugs).map((b) => b.ticket || 0));
-    missing.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-    missing.forEach((b) => { max += 1; store.update(b.id, { ticket: max }); });
+    backfilling = true;
+    try {
+      missing.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      for (const b of missing) {
+        const n = await store.reserveTicket(maxTicket());
+        store.update(b.id, { ticket: n });
+      }
+    } finally {
+      backfilling = false;
+    }
   }
 
   function render() {
@@ -273,15 +301,22 @@
     if (filterStatus !== "all") arr = arr.filter((b) => b.status === filterStatus);
     if (filterType !== "all") arr = arr.filter((b) => b.type === filterType);
     if (filterPriority !== "all") arr = arr.filter((b) => b.priority === filterPriority);
-    if (searchText) {
-      const q = searchText.toLowerCase().trim();
-      arr = arr.filter((b) => {
-        const hay = [
-          b.title, b.description, b.listings,
-          fmtTicket(b.ticket), "#" + (b.ticket || ""), b.ticket || ""
-        ].join(" ").toLowerCase();
-        return hay.includes(q);
-      });
+    if (searchText.trim()) {
+      const raw = searchText.trim();
+      const num = raw.replace(/^#/, ""); // "#12" ou "12"
+      if (/^\d+$/.test(num)) {
+        // Recherche par NUMÉRO : on ne garde que les tickets dont le numéro commence par ce qui est tapé
+        arr = arr.filter((b) => {
+          if (!b.ticket) return false;
+          const s = String(b.ticket);
+          return s.startsWith(num) || s.padStart(3, "0").startsWith(num);
+        });
+      } else {
+        // Recherche par TEXTE : titre, description, annonces concernées
+        const q = raw.toLowerCase();
+        arr = arr.filter((b) =>
+          [b.title, b.description, b.listings].join(" ").toLowerCase().includes(q));
+      }
     }
 
     arr.sort((a, b) => {
@@ -508,7 +543,7 @@
     ev.target.value = "";
   }
 
-  function submitForm(ev) {
+  async function submitForm(ev) {
     ev.preventDefault();
     const id = $("#f-id").value;
     const clientName = $("#f-client-name").value.trim();
@@ -542,7 +577,8 @@
       store.update(id, data);
       if (data.status === "traite" && !wasTraite) notify("traite", { ...bugs[id], ...data }, me);
     } else {
-      store.add({ ...data, ticket: nextTicket(), createdAt: Date.now(), createdBy: me });
+      const ticket = await store.reserveTicket(maxTicket());
+      store.add({ ...data, ticket, createdAt: Date.now(), createdBy: me });
     }
     closeModal();
   }
