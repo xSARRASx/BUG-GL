@@ -248,14 +248,14 @@
         + `https://xsarrasx.github.io/BUG-GL/`;
     }
 
-    recipients.forEach(([name, email]) => {
-      window.emailjs.send(cfg.serviceId, cfg.templateId, {
-        to_email: email,
-        to_name: name,
-        subject,
-        message,
-      }).catch((e) => console.error("Échec envoi mail à " + email, e));
-    });
+    // Un SEUL envoi pour toute l'équipe (évite les doublons + économise le quota)
+    const emails = recipients.map(([, email]) => email).join(",");
+    window.emailjs.send(cfg.serviceId, cfg.templateId, {
+      to_email: emails,
+      to_name: "Équipe Guest Lucky",
+      subject,
+      message,
+    }).catch((e) => console.error("Échec envoi mail :", e));
   }
 
   // -------------------------------------------------------------
