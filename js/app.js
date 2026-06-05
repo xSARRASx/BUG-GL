@@ -25,7 +25,7 @@
   const fmtTicket = (n) => (n ? "#" + String(n).padStart(3, "0") : "");
 
   const STATUS_LABEL = { nontraite: "Pas traité", encours: "En cours", traite: "Traité" };
-  const TYPE_LABEL = { bug: "🐞 Bug", amelioration: "✨ Amélioration", developpement: "🛠️ Développement" };
+  const TYPE_LABEL = { bug: "🐞 Bug", amelioration: "✨ Amélioration", developpement: "🛠️ Développement", investigation: "🔍 Investigation" };
   const PRIO_LABEL = { tres_urgente: "🚨 TRÈS URGENTE", haute: "🔥 Haute", moyenne: "Moyenne", basse: "Basse" };
   const PRIO_ORDER = { tres_urgente: 0, haute: 1, moyenne: 2, basse: 3 };
 
@@ -193,7 +193,7 @@
     }
   }
 
-  const TYPE_UPPER = { bug: "BUG", amelioration: "AMÉLIORATION", developpement: "DÉVELOPPEMENT" };
+  const TYPE_UPPER = { bug: "BUG", amelioration: "AMÉLIORATION", developpement: "DÉVELOPPEMENT", investigation: "INVESTIGATION" };
 
   // Bouton « Test mail » : diagnostic visible à l'écran
   function testMail() {

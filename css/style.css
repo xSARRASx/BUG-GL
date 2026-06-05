@@ -189,6 +189,7 @@ input[type="search"] { min-width: 220px; }
 .badge.type-bug { background: rgba(255,92,122,0.15); color: var(--red); }
 .badge.type-amelioration { background: rgba(108,92,231,0.18); color: #a99bff; }
 .badge.type-developpement { background: rgba(0,184,217,0.16); color: #36d0e8; }
+.badge.type-investigation { background: rgba(255,166,48,0.16); color: var(--orange); }
 .badge.prio-tres_urgente { background: var(--red); color: #fff; box-shadow: 0 0 0 1px rgba(255,92,122,0.4); }
 .badge.prio-haute { background: rgba(255,92,122,0.15); color: var(--red); }
 .badge.prio-moyenne { background: rgba(255,166,48,0.15); color: var(--orange); }
