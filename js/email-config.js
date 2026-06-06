@@ -21,8 +21,12 @@ window.emailConfig = {
     "Martin Moré": "martinmorebkk@gmail.com",
     "Sébastien Moré": "moresebastien@gmail.com",
     "Camille Fauveau": "camillefauveau.service@gmail.com",
-    "Kevin": "lumnistech@gmail.com"
+    "Kevin": "lumnistech@gmail.com",
+    "Estelle": ""  // ⬅️ email à compléter
   },
+
+  // Utilisateurs « restreints » : ne voient et ne reçoivent QUE leurs propres tickets
+  restricted: ["Estelle"],
 
   // Recevoir aussi un mail pour ses PROPRES actions ? (false = non)
   notifySelf: false

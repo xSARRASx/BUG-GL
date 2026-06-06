@@ -224,6 +224,8 @@
     let recipients = Object.entries(cfg.team || {});
     recipients = recipients.filter(([, email]) => email && email.trim()); // ignore les personnes sans email
     if (!cfg.notifySelf) recipients = recipients.filter(([name]) => name !== actor);
+    // Les utilisateurs restreints ne reçoivent QUE pour les tickets qu'ils ont créés
+    recipients = recipients.filter(([name]) => !isRestricted(name) || bug.createdBy === name);
     if (recipients.length === 0) return;
 
     const prio = PRIO_LABEL[bug.priority] || bug.priority;
@@ -295,9 +297,20 @@
     }
   }
 
+  // Liste des fiches visibles par l'utilisateur courant
+  // (un utilisateur "restreint" ne voit que ce qu'il a créé)
+  function isRestricted(name) {
+    return ((window.emailConfig && window.emailConfig.restricted) || []).includes(name);
+  }
+  function visibleBugs() {
+    const all = Object.values(bugs);
+    if (isRestricted(me)) return all.filter((b) => b.createdBy === me);
+    return all;
+  }
+
   function render() {
     const list = $("#list");
-    let arr = Object.values(bugs);
+    let arr = visibleBugs();
 
     if (filterStatus !== "all") arr = arr.filter((b) => b.status === filterStatus);
     if (filterType !== "all") arr = arr.filter((b) => b.type === filterType);
@@ -334,7 +347,7 @@
 
     renderStats();
 
-    const total = Object.keys(bugs).length;
+    const total = visibleBugs().length;
     const emptyEl = $("#empty");
     if (arr.length === 0) {
       if (total === 0) {
@@ -384,7 +397,7 @@
   }
 
   function renderStats() {
-    const arr = Object.values(bugs);
+    const arr = visibleBugs();
     const nb = (s) => arr.filter((b) => b.status === s).length;
     $("#stats").innerHTML = `
       <div class="stat-card"><div class="num">${arr.length}</div><div class="lbl">Total</div></div>
