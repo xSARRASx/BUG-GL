@@ -349,6 +349,11 @@ input[type="search"] { min-width: 220px; }
 .detail-client a { color: #a99bff; text-decoration: none; }
 .detail-client a:hover { text-decoration: underline; }
 .field input:focus, .field textarea:focus { outline: none; border-color: var(--primary); }
+.field select {
+  width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--text);
+  border-radius: 10px; padding: 11px 14px; font-size: 14px; font-family: inherit;
+}
+.field select:focus { outline: none; border-color: var(--primary); }
 .hint { color: var(--muted); font-size: 12px; display: block; margin-top: 6px; }
 
 .seg { display: flex; gap: 8px; flex-wrap: wrap; }

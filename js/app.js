@@ -329,7 +329,7 @@
         // Recherche par TEXTE : titre, description, annonces concernées
         const q = raw.toLowerCase();
         arr = arr.filter((b) =>
-          [b.title, b.description, b.listings].join(" ").toLowerCase().includes(q));
+          [b.title, b.description, b.listings, b.channel, b.reservation].join(" ").toLowerCase().includes(q));
       }
     }
 
@@ -422,6 +422,7 @@
         </div>
         <h3>${escapeHtml(b.title)}</h3>
         ${b.listings ? `<div class="card-listings">🏠 ${escapeHtml(b.listings)}</div>` : ""}
+        ${(b.channel || b.reservation) ? `<div class="card-listings">${b.channel ? "📺 " + escapeHtml(b.channel) : ""}${b.channel && b.reservation ? " · " : ""}${b.reservation ? "🧾 " + escapeHtml(b.reservation) : ""}</div>` : ""}
         <p class="desc">${escapeHtml(b.description || "")}</p>
         ${photos.length ? `<div class="card-photos">${photoHtml}</div>` : ""}
         <div class="card-foot">
@@ -470,6 +471,8 @@
     setSeg("f-priority", isEdit ? bug.priority : "moyenne");
     setSeg("f-status", isEdit ? bug.status : "nontraite");
     $("#f-listings").value = isEdit ? (bug.listings || "") : "";
+    $("#f-channel").value = isEdit ? (bug.channel || "") : "";
+    $("#f-reservation").value = isEdit ? (bug.reservation || "") : "";
     $("#f-client-name").value = isEdit ? (bug.clientName || "") : "";
     $("#f-client-email").value = isEdit ? (bug.clientEmail || "") : "";
     $("#f-client-phone").value = isEdit ? (bug.clientPhone || "") : "";
@@ -506,6 +509,9 @@
       ${bug.listings ? `
         <h4 class="detail-label">🏠 Annonce(s) concernée(s)</h4>
         <div class="detail-listings">${escapeHtml(bug.listings)}</div>` : ""}
+      ${(bug.channel || bug.reservation) ? `
+        <h4 class="detail-label">Réservation</h4>
+        <div class="detail-listings">${bug.channel ? "📺 " + escapeHtml(bug.channel) : ""}${bug.channel && bug.reservation ? " · " : ""}${bug.reservation ? "🧾 " + escapeHtml(bug.reservation) : ""}</div>` : ""}
       ${(bug.clientName || bug.clientEmail || bug.clientPhone) ? `
         <h4 class="detail-label">Client</h4>
         <div class="detail-client">
@@ -574,6 +580,8 @@
       priority: getSeg("f-priority"),
       status: getSeg("f-status"),
       listings: $("#f-listings").value.trim(),
+      channel: $("#f-channel").value,
+      reservation: $("#f-reservation").value.trim(),
       clientName, clientEmail, clientPhone,
       photos: editingPhotos.reduce((acc, p) => { acc[uid()] = p; return acc; }, {}),
       updatedAt: Date.now(),
