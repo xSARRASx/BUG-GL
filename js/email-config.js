@@ -22,7 +22,7 @@ window.emailConfig = {
     "Sébastien Moré": "moresebastien@gmail.com",
     "Camille Fauveau": "camillefauveau.service@gmail.com",
     "Kevin": "lumnistech@gmail.com",
-    "Estelle": ""  // ⬅️ email à compléter
+    "Estelle": "estelle.quequet@wanadoo.fr"
   },
 
   // Utilisateurs « restreints » : ne voient et ne reçoivent QUE leurs propres tickets
