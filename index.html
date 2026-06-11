@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=11" />
+  <link rel="stylesheet" href="css/style.css?v=12" />
 </head>
 <body>
   <!-- Bandeau d'état (mode local / connecté) -->
@@ -138,16 +138,28 @@
         </div>
 
         <div class="client-box">
-          <div class="client-box-title">👤 Infos client <span class="optional">(optionnel)</span></div>
+          <div class="client-box-title">👤 Voyageur <span class="optional">(optionnel)</span></div>
           <div class="field">
-            <input type="text" id="f-client-name" placeholder="Nom et prénom du client" />
+            <input type="text" id="f-client-name" placeholder="Nom du voyageur" />
           </div>
           <div class="field-row">
             <div class="field">
-              <input type="email" id="f-client-email" placeholder="Email du client" />
+              <input type="email" id="f-client-email" placeholder="Adresse e-mail du voyageur" />
             </div>
             <div class="field">
-              <input type="text" id="f-client-phone" placeholder="Téléphone du client" />
+              <input type="text" id="f-client-phone" placeholder="Numéro de téléphone du voyageur" />
+            </div>
+          </div>
+        </div>
+
+        <div class="client-box">
+          <div class="client-box-title">🛎️ Conciergerie <span class="optional">(optionnel)</span></div>
+          <div class="field-row">
+            <div class="field">
+              <input type="text" id="f-concierge-phone-perso" placeholder="Téléphone personnel" />
+            </div>
+            <div class="field">
+              <input type="text" id="f-concierge-phone-pro" placeholder="Téléphone professionnel" />
             </div>
           </div>
         </div>
@@ -233,8 +245,8 @@
   <div id="lightbox" class="lightbox hidden"><img id="lightbox-img" src="" alt="" /></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-  <script src="js/firebase-config.js?v=11"></script>
-  <script src="js/email-config.js?v=11"></script>
-  <script src="js/app.js?v=11"></script>
+  <script src="js/firebase-config.js?v=12"></script>
+  <script src="js/email-config.js?v=12"></script>
+  <script src="js/app.js?v=12"></script>
 </body>
 </html>

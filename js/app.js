@@ -476,6 +476,8 @@
     $("#f-client-name").value = isEdit ? (bug.clientName || "") : "";
     $("#f-client-email").value = isEdit ? (bug.clientEmail || "") : "";
     $("#f-client-phone").value = isEdit ? (bug.clientPhone || "") : "";
+    $("#f-concierge-phone-perso").value = isEdit ? (bug.conciergePhonePerso || "") : "";
+    $("#f-concierge-phone-pro").value = isEdit ? (bug.conciergePhonePro || "") : "";
     editingPhotos = isEdit && bug.photos ? Object.values(bug.photos) : [];
     renderPhotosPreview();
     $("#btn-delete").classList.toggle("hidden", !isEdit);
@@ -513,11 +515,17 @@
         <h4 class="detail-label">Réservation</h4>
         <div class="detail-listings">${bug.channel ? "📺 " + escapeHtml(bug.channel) : ""}${bug.channel && bug.reservation ? " · " : ""}${bug.reservation ? "🧾 " + escapeHtml(bug.reservation) : ""}</div>` : ""}
       ${(bug.clientName || bug.clientEmail || bug.clientPhone) ? `
-        <h4 class="detail-label">Client</h4>
+        <h4 class="detail-label">👤 Voyageur</h4>
         <div class="detail-client">
           ${bug.clientName ? `<div>👤 ${escapeHtml(bug.clientName)}</div>` : ""}
           ${bug.clientEmail ? `<div>✉️ <a href="mailto:${escapeHtml(bug.clientEmail)}">${escapeHtml(bug.clientEmail)}</a></div>` : ""}
           ${bug.clientPhone ? `<div>📞 <a href="tel:${escapeHtml(bug.clientPhone)}">${escapeHtml(bug.clientPhone)}</a></div>` : ""}
+        </div>` : ""}
+      ${(bug.conciergePhonePerso || bug.conciergePhonePro) ? `
+        <h4 class="detail-label">🛎️ Conciergerie</h4>
+        <div class="detail-client">
+          ${bug.conciergePhonePerso ? `<div>📱 Perso : <a href="tel:${escapeHtml(bug.conciergePhonePerso)}">${escapeHtml(bug.conciergePhonePerso)}</a></div>` : ""}
+          ${bug.conciergePhonePro ? `<div>☎️ Pro : <a href="tel:${escapeHtml(bug.conciergePhonePro)}">${escapeHtml(bug.conciergePhonePro)}</a></div>` : ""}
         </div>` : ""}
       ${photos.length ? `
         <h4 class="detail-label">Photos</h4>
@@ -573,6 +581,8 @@
     const clientName = $("#f-client-name").value.trim();
     const clientEmail = $("#f-client-email").value.trim();
     const clientPhone = $("#f-client-phone").value.trim();
+    const conciergePhonePerso = $("#f-concierge-phone-perso").value.trim();
+    const conciergePhonePro = $("#f-concierge-phone-pro").value.trim();
     const data = {
       title: $("#f-title").value.trim(),
       description: $("#f-desc").value.trim(),
@@ -583,6 +593,7 @@
       channel: $("#f-channel").value,
       reservation: $("#f-reservation").value.trim(),
       clientName, clientEmail, clientPhone,
+      conciergePhonePerso, conciergePhonePro,
       photos: editingPhotos.reduce((acc, p) => { acc[uid()] = p; return acc; }, {}),
       updatedAt: Date.now(),
       updatedBy: me,
