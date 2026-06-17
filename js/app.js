@@ -664,6 +664,8 @@
     localStorage.setItem("bugtracker_user", name);
     $("#me").innerHTML = `Connecté en tant que <b>${escapeHtml(name)}</b>`;
     $("#who-modal").classList.add("hidden");
+    const seoBtn = document.getElementById("btn-seo");
+    if (seoBtn) seoBtn.classList.toggle("hidden", !["Martin Moré", "Camille Fauveau"].includes(name));
     if (store && store.setPresence) store.setPresence(name);
   }
 

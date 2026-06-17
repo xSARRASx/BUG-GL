@@ -11,6 +11,10 @@
     "meta": {
       ".read": true,
       ".write": true
+    },
+    "seo": {
+      ".read": true,
+      ".write": true
     }
   }
 }

@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Suivi SEO — Guest Lucky</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="apple-touch-icon" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css?v=14" />
+  <style>
+    /* --- Bandeau Loi Hoguet --- */
+    .hoguet-banner {
+      background: linear-gradient(135deg, #2a1e00, #3a2c00);
+      border-bottom: 1px solid #6b5100;
+      color: #ffd37a;
+      padding: 13px 28px;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+    .hoguet-banner strong { color: #ffe099; }
+    .hoguet-banner .hoguet-title { font-weight: 800; font-size: 14px; margin-bottom: 2px; letter-spacing: -0.2px; }
+
+    /* --- Badges SEO --- */
+    .badge.activite-conciergerie { background: rgba(108,92,231,0.18); color: #a99bff; }
+    .badge.activite-sous_location { background: rgba(0,184,217,0.16); color: #36d0e8; }
+    .badge.carte-oui  { background: rgba(46,204,143,0.14); color: var(--green); }
+    .badge.carte-non  { background: rgba(255,92,122,0.14); color: var(--red); }
+
+    /* --- Cartes SEO --- */
+    .card.seo-afaire  { border-left-color: var(--red); }
+    .card.seo-encours { border-left-color: var(--orange); }
+    .card.seo-termine {
+      border-left-color: var(--green);
+      background: rgba(46,204,143,0.10);
+      border-color: rgba(46,204,143,0.32);
+    }
+    .card.seo-termine:hover { background: rgba(46,204,143,0.16); }
+
+    .card-url { font-size: 12.5px; margin: 4px 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card-url a { color: #a99bff; text-decoration: none; }
+    .card-url a:hover { text-decoration: underline; }
+    .card-ville { font-size: 12px; color: var(--muted); font-weight: 600; margin-top: 4px; }
+    .seo-note {
+      color: var(--muted); font-size: 13.5px; line-height: 1.5; margin-top: 8px;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+      overflow: hidden; white-space: pre-wrap;
+    }
+    .card-foot a { color: #a99bff; text-decoration: none; font-size: 12px; }
+    .card-foot a:hover { text-decoration: underline; }
+
+    /* --- Détail --- */
+    .detail-url a { color: #a99bff; font-size: 15px; text-decoration: none; }
+    .detail-url a:hover { text-decoration: underline; }
+
+    /* --- Fichiers joints --- */
+    .detail-files { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
+    .file-chip {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px 12px; font-size: 13px;
+    }
+    .file-chip .file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+    .file-chip .btn-dl {
+      background: none; border: none; color: var(--primary); cursor: pointer;
+      font-size: 13px; font-weight: 600; font-family: inherit; padding: 2px 6px;
+      white-space: nowrap;
+    }
+    .file-chip .btn-dl:hover { text-decoration: underline; }
+    .file-chip .rm-file {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 18px; line-height: 1; padding: 0 2px;
+    }
+    .file-chip .rm-file:hover { color: var(--danger); }
+
+    /* --- Écran accès refusé --- */
+    .access-screen {
+      min-height: 80vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      text-align: center; padding: 40px;
+    }
+    .access-screen .lock-icon { font-size: 60px; }
+    .access-screen h2 { font-size: 22px; font-weight: 700; }
+    .access-screen p { color: var(--muted); font-size: 15px; max-width: 360px; line-height: 1.6; }
+
+    /* --- Mot de passe dans le who-modal --- */
+    .pwd-box { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+    .pwd-box input[type="password"] {
+      width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--text);
+      border-radius: 10px; padding: 11px 14px; font-size: 14px; font-family: inherit;
+    }
+    .pwd-box input[type="password"]:focus { outline: none; border-color: var(--primary); }
+    .pwd-error { color: var(--danger); font-size: 13px; font-weight: 600; display: none; margin-top: 2px; }
+    .who-buttons button.selected { border-color: var(--primary); background: rgba(108,92,231,0.2); color: #a99bff; }
+
+    .nav-back { font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; }
+    .nav-back:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+  <!-- Bandeau Loi Hoguet (toujours visible) -->
+  <div class="hoguet-banner">
+    <div class="hoguet-title">⚖️ Rappel Loi Hoguet</div>
+    Pour un client <strong>sans Carte G</strong>, ne jamais utiliser les mots <strong>gestion / gestionnaire / gestion locative</strong> (ni "gestion Airbnb").
+    Vocabulaire autorisé : <strong>conciergerie, location courte durée, location saisonnière, sous-location</strong>.
+  </div>
+
+  <!-- Bandeau état Firebase -->
+  <div id="status-banner" class="status-banner hidden"></div>
+
+  <!-- Écran accès refusé -->
+  <div id="access-denied" class="hidden">
+    <div class="access-screen">
+      <div class="lock-icon">🔒</div>
+      <h2>Accès réservé</h2>
+      <p>Cette section est réservée à <strong>Martin Moré</strong> et <strong>Camille Fauveau</strong>.</p>
+      <a href="index.html" class="btn btn-ghost" style="margin-top:8px">← Retour aux bugs</a>
+    </div>
+  </div>
+
+  <!-- Application SEO -->
+  <div id="seo-app" class="hidden">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo">📊</div>
+        <div>
+          <h1>Suivi SEO</h1>
+          <p class="subtitle">Guest Lucky — Avancement clients</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <a href="index.html" class="nav-back">← Bugs</a>
+        <div id="me" class="me"></div>
+        <button id="btn-switch" class="btn btn-ghost" title="Changer de profil">🔄 Changer</button>
+        <button id="btn-add" class="btn btn-primary">+ Ajouter un site</button>
+      </div>
+    </header>
+
+    <section class="stats" id="stats"></section>
+
+    <section class="filters">
+      <div class="filter-group" id="filter-status">
+        <button class="chip active" data-status="all">Tous</button>
+        <button class="chip" data-status="afaire">🔴 À faire</button>
+        <button class="chip" data-status="encours">🟠 En cours</button>
+        <button class="chip" data-status="termine">🟢 Terminé</button>
+      </div>
+      <div class="filter-group">
+        <input type="search" id="search" placeholder="🔎 Rechercher (nom, ville, note…)" />
+      </div>
+    </section>
+
+    <main id="list" class="list"></main>
+    <div id="empty" class="empty hidden">
+      <p>Aucun site pour l'instant.</p>
+      <button class="btn btn-primary" onclick="document.getElementById('btn-add').click()">Ajouter le premier site</button>
+    </div>
+  </div>
+
+  <!-- Modale ajout / édition -->
+  <div id="modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="modal-title">Nouveau site</h2>
+        <button class="modal-close" id="modal-close">&times;</button>
+      </div>
+      <form id="form" class="modal-body">
+        <input type="hidden" id="f-id" />
+
+        <div class="field-row">
+          <div class="field">
+            <label>Activité</label>
+            <div class="seg" id="f-activite">
+              <button type="button" data-val="conciergerie" class="active">🏨 Conciergerie</button>
+              <button type="button" data-val="sous_location">🏠 Sous-location</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Carte G</label>
+            <div class="seg" id="f-carte">
+              <button type="button" data-val="oui">✅ Oui</button>
+              <button type="button" data-val="non" class="active">❌ Non</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-nom">Nom du client *</label>
+          <input type="text" id="f-nom" placeholder="Ex : M. Dupont — Villa Les Calanques" required />
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="f-url">🌐 URL du site</label>
+            <input type="text" id="f-url" placeholder="https://…" />
+          </div>
+          <div class="field">
+            <label for="f-ville">📍 Ville</label>
+            <input type="text" id="f-ville" placeholder="Ex : Marseille" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-email">✉️ E-mail du client</label>
+          <input type="email" id="f-email" placeholder="client@exemple.com" />
+        </div>
+
+        <div class="field">
+          <label>Statut</label>
+          <div class="seg" id="f-status">
+            <button type="button" data-val="afaire" class="active">🔴 À faire</button>
+            <button type="button" data-val="encours">🟠 En cours</button>
+            <button type="button" data-val="termine">🟢 Terminé</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-note">📝 Note libre</label>
+          <textarea id="f-note" rows="4" placeholder="Avancement, points en attente, mots-clés, remarques…"></textarea>
+        </div>
+
+        <div class="field">
+          <label>📎 Fichiers joints</label>
+          <div class="photos-input">
+            <label class="photo-add" for="f-files">📎 Ajouter des fichiers</label>
+            <input type="file" id="f-files" multiple hidden />
+            <div id="f-files-preview" class="detail-files" style="margin-top:10px;margin-bottom:0"></div>
+          </div>
+          <small class="hint">PDF, Word, images… Évite les fichiers trop lourds (max ~2 Mo par fichier).</small>
+        </div>
+
+        <div class="modal-foot">
+          <button type="button" id="btn-delete" class="btn btn-danger hidden">Supprimer</button>
+          <div class="spacer"></div>
+          <button type="button" id="btn-cancel" class="btn btn-ghost">Annuler</button>
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modale de lecture (Voir) -->
+  <div id="detail-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="detail-title">Détail</h2>
+        <button class="modal-close" id="detail-close">&times;</button>
+      </div>
+      <div class="modal-body" id="detail-body"></div>
+      <div class="modal-foot detail-foot">
+        <div id="detail-status-actions" class="detail-status-actions"></div>
+        <div class="detail-foot-end">
+          <button type="button" class="btn btn-ghost" onclick="document.getElementById('detail-close').click()">↩ Retour</button>
+          <button type="button" class="btn btn-primary" id="detail-edit">✏️ Modifier</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale identité + mot de passe -->
+  <div id="who-modal" class="modal-overlay hidden">
+    <div class="modal modal-small">
+      <div class="modal-head"><h2>Qui es-tu ?</h2></div>
+      <div class="modal-body">
+        <p class="who-intro">Section réservée à Martin et Camille. Choisis ton nom puis entre ton mot de passe.</p>
+        <div class="who-buttons" id="who-buttons">
+          <button data-name="Martin Moré">Martin Moré</button>
+          <button data-name="Camille Fauveau">Camille Fauveau</button>
+        </div>
+        <div class="pwd-box hidden" id="pwd-box">
+          <input type="password" id="pwd-input" placeholder="Mot de passe" autocomplete="off" />
+          <span class="pwd-error" id="pwd-error">❌ Mot de passe incorrect, réessaie.</span>
+          <button type="button" id="pwd-ok" class="btn btn-primary">Entrer</button>
+        </div>
+        <div style="margin-top:20px; text-align:center">
+          <a href="index.html" style="font-size:13px; color:var(--muted); text-decoration:none">← Retour aux bugs</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/firebase-config.js?v=14"></script>
+  <script src="js/seo.js?v=14"></script>
+</body>
+</html>
