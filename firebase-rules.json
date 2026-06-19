@@ -15,6 +15,10 @@
     "seo": {
       ".read": true,
       ".write": true
+    },
+    "blog": {
+      ".read": true,
+      ".write": true
     }
   }
 }

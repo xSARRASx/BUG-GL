@@ -116,6 +116,57 @@
   let searchText = "";
   let editingFiles = [];
   let detailSiteId = null;
+  let revFrom = null; // index de mois (année*12+mois)
+  let revTo = null;
+
+  // --- Mois : conversions ---
+  function ymToIndex(ym) {
+    if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return null;
+    const [y, m] = ym.split("-").map(Number);
+    return y * 12 + (m - 1);
+  }
+  function dateToIndex(ts) { const d = new Date(ts); return d.getFullYear() * 12 + d.getMonth(); }
+  function currentIndex() { const d = new Date(); return d.getFullYear() * 12 + d.getMonth(); }
+  function indexToYm(idx) { const y = Math.floor(idx / 12), m = (idx % 12) + 1; return `${y}-${String(m).padStart(2, "0")}`; }
+
+  // Date à laquelle un site a été marqué « terminé »
+  function termineIndex(s) {
+    return dateToIndex(s.termineAt || s.updatedAt || s.createdAt || Date.now());
+  }
+
+  // -------------------------------------------------------
+  //  Panneau revenus (50 € par site terminé)
+  // -------------------------------------------------------
+  function renderRevenue() {
+    const from = revFrom != null ? revFrom : currentIndex();
+    const to   = revTo   != null ? revTo   : currentIndex();
+    const lo = Math.min(from, to), hi = Math.max(from, to);
+    let count = 0;
+    Object.values(sites).forEach((s) => {
+      if (s.statut !== "termine") return;
+      const idx = termineIndex(s);
+      if (idx >= lo && idx <= hi) count++;
+    });
+    $("#rev-total").textContent = (count * 50) + " €";
+    $("#rev-count").textContent = count;
+  }
+
+  function setRevenueRange(kind) {
+    const now = new Date();
+    if (kind === "mois") {
+      revFrom = revTo = currentIndex();
+    } else if (kind === "annee") {
+      revFrom = now.getFullYear() * 12 + 0;
+      revTo = currentIndex();
+    } else if (kind === "tout") {
+      let min = currentIndex();
+      Object.values(sites).forEach((s) => { if (s.statut === "termine") { const i = termineIndex(s); if (i < min) min = i; } });
+      revFrom = min; revTo = currentIndex();
+    }
+    $("#rev-from").value = indexToYm(revFrom);
+    $("#rev-to").value = indexToYm(revTo);
+    renderRevenue();
+  }
 
   // -------------------------------------------------------
   //  Stats (avec suivi mensuel)
@@ -126,18 +177,6 @@
     const afaire   = arr.filter((s) => s.statut === "afaire").length;
     const encours  = arr.filter((s) => s.statut === "encours").length;
     const termine  = arr.filter((s) => s.statut === "termine").length;
-
-    // Sites terminés ce mois-ci
-    const now = new Date();
-    const moisCourant = now.getFullYear() * 100 + (now.getMonth() + 1);
-    const termineCeMois = arr.filter((s) => {
-      if (s.statut !== "termine" || !s.updatedAt) return false;
-      const d = new Date(s.updatedAt);
-      return d.getFullYear() * 100 + (d.getMonth() + 1) === moisCourant;
-    }).length;
-    const revenuMois = termineCeMois * 50;
-
-    const moisLabel = now.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
 
     $("#stats").innerHTML = `
       <div class="stat-card">
@@ -155,14 +194,6 @@
       <div class="stat-card green">
         <div class="num">${termine}</div>
         <div class="lbl">Terminés</div>
-      </div>
-      <div class="stat-card" style="border-color: rgba(108,92,231,0.5)">
-        <div class="num" style="color:#a99bff">${termineCeMois}</div>
-        <div class="lbl">Terminés en ${moisLabel}</div>
-      </div>
-      <div class="stat-card" style="border-color: rgba(108,92,231,0.5)">
-        <div class="num" style="color:#a99bff">${revenuMois} €</div>
-        <div class="lbl">Revenus estimés (${moisLabel})</div>
       </div>
     `;
   }
@@ -189,6 +220,7 @@
     });
 
     renderStats();
+    renderRevenue();
 
     const emptyEl = $("#empty");
     const list = $("#list");
@@ -365,8 +397,13 @@
     if (!data.nom) return;
 
     if (id) {
+      const wasTermine = sites[id] && sites[id].statut === "termine";
+      // Mémorise la date de passage en « terminé » (sert au calcul des revenus)
+      if (data.statut === "termine" && !wasTermine) data.termineAt = Date.now();
+      if (data.statut !== "termine") data.termineAt = null;
       store.update(id, data);
     } else {
+      if (data.statut === "termine") data.termineAt = Date.now();
       store.add({ ...data, createdAt: Date.now(), createdBy: me });
     }
     closeModal();
@@ -470,9 +507,19 @@
     $("#detail-status-actions").addEventListener("click", (e) => {
       const btn = e.target.closest(".status-btn");
       if (!btn || !btn.dataset.s) return;
-      store.update(btn.dataset.id, { statut: btn.dataset.s, updatedAt: Date.now(), updatedBy: me });
+      const id = btn.dataset.id;
+      const wasTermine = sites[id] && sites[id].statut === "termine";
+      const patch = { statut: btn.dataset.s, updatedAt: Date.now(), updatedBy: me };
+      if (btn.dataset.s === "termine" && !wasTermine) patch.termineAt = Date.now();
+      if (btn.dataset.s !== "termine") patch.termineAt = null;
+      store.update(id, patch);
       closeDetail();
     });
+
+    // Revenus : sélecteur de dates
+    $("#rev-from").addEventListener("change", () => { revFrom = ymToIndex($("#rev-from").value); renderRevenue(); });
+    $("#rev-to").addEventListener("change", () => { revTo = ymToIndex($("#rev-to").value); renderRevenue(); });
+    $$(".revenue-quick .chip").forEach((b) => b.addEventListener("click", () => setRevenueRange(b.dataset.range)));
 
     // Filtres
     $$("#filter-status .chip").forEach((c) => c.addEventListener("click", () => {
@@ -506,6 +553,11 @@
   async function start() {
     await initStore();
     wireEvents();
+
+    // Sélecteur de revenus : ce mois-ci par défaut
+    revFrom = revTo = currentIndex();
+    $("#rev-from").value = indexToYm(revFrom);
+    $("#rev-to").value = indexToYm(revTo);
 
     store.subscribe((data) => { sites = data || {}; render(); });
 
