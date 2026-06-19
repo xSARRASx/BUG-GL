@@ -65,6 +65,30 @@
     .file-chip .rm-file { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; padding: 0 2px; }
     .file-chip .rm-file:hover { color: var(--danger); }
 
+    /* --- Journal des articles --- */
+    .articles-journal { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+    .article-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 9px; padding: 9px 12px;
+    }
+    .article-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .article-mois { font-size: 11px; font-weight: 700; color: #a99bff; background: rgba(108,92,231,0.15); padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
+    .article-titre { font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .article-side { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+    .article-side a { color: #a99bff; text-decoration: none; font-size: 13px; }
+    .article-side a:hover { text-decoration: underline; }
+    .rm-article { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; }
+    .rm-article:hover { color: var(--danger); }
+    .article-empty { color: var(--muted); font-size: 13px; margin-bottom: 4px; }
+    .article-add { margin-bottom: 22px; }
+    .article-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .article-form input[type="month"], .article-form input[type="text"] {
+      background: var(--card); border: 1px solid var(--border); color: var(--text);
+      border-radius: 9px; padding: 9px 12px; font-size: 13px; font-family: inherit;
+    }
+    .article-form input[type="text"] { flex: 1; min-width: 140px; }
+    .article-form input:focus { outline: none; border-color: var(--primary); }
+
     /* --- Panneau revenus --- */
     .revenue-panel {
       margin: 0 28px 22px; background: var(--card);
@@ -244,6 +268,42 @@
           <small class="hint">Ces infos permettent à Martin de publier les articles. Visible uniquement dans cette section protégée.</small>
         </div>
 
+        <div class="client-box">
+          <div class="client-box-title">🎯 Brief SEO <span class="optional">— pour générer les articles</span></div>
+          <div class="field-row">
+            <div class="field">
+              <label for="f-secteur">🏷️ Secteur d'activité</label>
+              <input type="text" id="f-secteur" placeholder="Ex : Plombier-chauffagiste" />
+            </div>
+            <div class="field">
+              <label for="f-ville">📍 Ville / zone</label>
+              <input type="text" id="f-ville" placeholder="Ex : Annecy, Haute-Savoie" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="f-motscles">🔑 Mots-clés cibles</label>
+            <input type="text" id="f-motscles" placeholder="Ex : dépannage plomberie, fuite d'eau, chauffe-eau" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="f-ton">🗣️ Ton de voix</label>
+              <select id="f-ton">
+                <option value="">— non précisé —</option>
+                <option value="Professionnel &amp; rassurant">Professionnel &amp; rassurant</option>
+                <option value="Chaleureux &amp; proche">Chaleureux &amp; proche</option>
+                <option value="Expert &amp; technique">Expert &amp; technique</option>
+                <option value="Dynamique &amp; moderne">Dynamique &amp; moderne</option>
+                <option value="Luxe &amp; élégant">Luxe &amp; élégant</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="f-public">👥 Public cible</label>
+              <input type="text" id="f-public" placeholder="Ex : Particuliers, propriétaires" />
+            </div>
+          </div>
+          <small class="hint">Plus c'est rempli, plus les articles générés sont précis et bien référencés (SEO local + IA).</small>
+        </div>
+
         <div class="field">
           <label for="f-note">📝 Note libre</label>
           <textarea id="f-note" rows="4" placeholder="Thèmes d'articles, mots-clés, rythme, remarques…"></textarea>
@@ -311,6 +371,6 @@
   </div>
 
   <script src="js/firebase-config.js?v=15"></script>
-  <script src="js/blog.js?v=15"></script>
+  <script src="js/blog.js?v=16"></script>
 </body>
 </html>

@@ -215,7 +215,7 @@
     if (searchText.trim()) {
       const q = searchText.trim().toLowerCase();
       arr = arr.filter((c) =>
-        [c.nom, c.url, c.email, c.note, c.wpLogin].join(" ").toLowerCase().includes(q));
+        [c.nom, c.url, c.email, c.note, c.wpLogin, c.secteur, c.ville, c.motsCles].join(" ").toLowerCase().includes(q));
     }
 
     arr.sort((a, b) => {
@@ -274,6 +274,9 @@
     if (!c) return;
     detailId = id;
     const files = c.files ? Object.values(c.files) : [];
+    const articles = c.articles
+      ? Object.values(c.articles).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      : [];
     const date = c.createdAt
       ? new Date(c.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
       : "";
@@ -295,7 +298,39 @@
           ${c.email ? `<div>✉️ <a href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a></div>` : ""}
           ${c.phone ? `<div>📞 <a href="tel:${escapeHtml(c.phone)}">${escapeHtml(c.phone)}</a></div>` : ""}
         </div>` : ""}
+      ${(c.secteur || c.ville || c.motsCles || c.ton || c.publicCible) ? `
+        <h4 class="detail-label">🎯 Brief SEO</h4>
+        <div class="detail-client">
+          ${c.secteur ? `<div>🏷️ <b>Secteur :</b> ${escapeHtml(c.secteur)}</div>` : ""}
+          ${c.ville ? `<div>📍 <b>Zone :</b> ${escapeHtml(c.ville)}</div>` : ""}
+          ${c.motsCles ? `<div>🔑 <b>Mots-clés :</b> ${escapeHtml(c.motsCles)}</div>` : ""}
+          ${c.ton ? `<div>🗣️ <b>Ton :</b> ${escapeHtml(c.ton)}</div>` : ""}
+          ${c.publicCible ? `<div>👥 <b>Public :</b> ${escapeHtml(c.publicCible)}</div>` : ""}
+        </div>` : ""}
       ${c.note ? `<h4 class="detail-label">📝 Note</h4><div class="detail-desc">${escapeHtml(c.note)}</div>` : ""}
+      <h4 class="detail-label">📰 Journal des articles${articles.length ? ` (${articles.length})` : ""}</h4>
+      <div class="articles-journal">
+        ${articles.length ? articles.map((a) => `
+          <div class="article-row">
+            <div class="article-main">
+              <span class="article-mois">${escapeHtml(a.mois || "")}</span>
+              <span class="article-titre" title="${escapeHtml(a.titre || "")}">${escapeHtml(a.titre || "")}</span>
+            </div>
+            <div class="article-side">
+              ${a.lien ? `<a href="${escapeHtml(a.lien)}" target="_blank" rel="noopener">🔗 voir</a>` : ""}
+              <button class="rm-article" data-aid="${escapeHtml(a.id)}" title="Supprimer">×</button>
+            </div>
+          </div>`).join("") : `<div class="article-empty">Aucun article enregistré pour l'instant.</div>`}
+      </div>
+      <div class="article-add">
+        <button type="button" class="btn btn-ghost" id="article-add-toggle">+ Ajouter un article</button>
+        <div class="article-form hidden" id="article-form">
+          <input type="month" id="art-mois" />
+          <input type="text" id="art-titre" placeholder="Titre de l'article" />
+          <input type="text" id="art-lien" placeholder="Lien (facultatif)" />
+          <button type="button" class="btn btn-primary" id="art-save">Enregistrer</button>
+        </div>
+      </div>
       ${files.length ? `
         <h4 class="detail-label">📎 Fichiers joints</h4>
         <div class="detail-files">
@@ -342,6 +377,11 @@
     $("#f-url").value      = isEdit ? (c.url || "") : "";
     $("#f-wp-login").value = isEdit ? (c.wpLogin || "") : "";
     $("#f-wp-pass").value  = isEdit ? (c.wpPass || "") : "";
+    $("#f-secteur").value  = isEdit ? (c.secteur || "") : "";
+    $("#f-ville").value    = isEdit ? (c.ville || "") : "";
+    $("#f-motscles").value = isEdit ? (c.motsCles || "") : "";
+    $("#f-ton").value      = isEdit ? (c.ton || "") : "";
+    $("#f-public").value   = isEdit ? (c.publicCible || "") : "";
     $("#f-note").value     = isEdit ? (c.note || "") : "";
     editingFiles = isEdit && c.files ? Object.values(c.files) : [];
     renderFilesPreview();
@@ -392,6 +432,11 @@
       url:     $("#f-url").value.trim(),
       wpLogin: $("#f-wp-login").value.trim(),
       wpPass:  $("#f-wp-pass").value,
+      secteur:     $("#f-secteur").value.trim(),
+      ville:       $("#f-ville").value.trim(),
+      motsCles:    $("#f-motscles").value.trim(),
+      ton:         $("#f-ton").value,
+      publicCible: $("#f-public").value.trim(),
       note:    $("#f-note").value.trim(),
       files:   editingFiles.reduce((acc, f) => { acc[f.id] = f; return acc; }, {}),
       updatedAt: Date.now(),
@@ -531,6 +576,54 @@
         if (!f) return;
         const a = document.createElement("a");
         a.href = f.data; a.download = f.name; a.click();
+        return;
+      }
+
+      // --- Journal des articles ---
+      const toggle = e.target.closest("#article-add-toggle");
+      if (toggle) {
+        const form = $("#article-form");
+        form.classList.toggle("hidden");
+        if (!form.classList.contains("hidden")) {
+          if (!$("#art-mois").value) $("#art-mois").value = indexToYm(currentIndex());
+          $("#art-titre").focus();
+        }
+        return;
+      }
+
+      const saveBtn = e.target.closest("#art-save");
+      if (saveBtn) {
+        const c = clients[detailId];
+        if (!c) return;
+        const titre = $("#art-titre").value.trim();
+        if (!titre) { $("#art-titre").focus(); return; }
+        const aid = uid();
+        const articles = Object.assign({}, c.articles || {});
+        articles[aid] = {
+          id: aid,
+          mois: $("#art-mois").value || indexToYm(currentIndex()),
+          titre,
+          lien: $("#art-lien").value.trim(),
+          createdAt: Date.now(),
+          createdBy: me,
+        };
+        clients[detailId] = Object.assign({}, c, { articles });
+        store.update(detailId, { articles });
+        openDetail(detailId);
+        return;
+      }
+
+      const rmA = e.target.closest(".rm-article");
+      if (rmA) {
+        const c = clients[detailId];
+        if (!c || !c.articles) return;
+        if (!confirm("Supprimer cet article du journal ?")) return;
+        const articles = Object.assign({}, c.articles);
+        delete articles[rmA.dataset.aid];
+        clients[detailId] = Object.assign({}, c, { articles });
+        store.update(detailId, { articles });
+        openDetail(detailId);
+        return;
       }
     });
 
