@@ -15,8 +15,8 @@
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   // --- Accès & mots de passe ---
-  const SEO_EDITORS = ["Martin Moré", "Camille Fauveau"];
-  const SEO_PASSWORDS = { "Martin Moré": "martin@", "Camille Fauveau": "camille@" };
+  const SEO_EDITORS = ["Martin Moré", "Camille Fauveau", "Sébastien Moré", "Pierre Moré"];
+  const SEO_PASSWORDS = { "Martin Moré": "martin@", "Camille Fauveau": "camille@", "Sébastien Moré": "sebastien@", "Pierre Moré": "pierre@" };
 
   // --- Labels ---
   const STATUT_LABEL = { afaire: "🔴 À faire", encours: "🟠 En cours", termine: "🟢 Terminé" };

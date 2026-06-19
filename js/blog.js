@@ -15,8 +15,8 @@
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   // --- Accès & mots de passe ---
-  const EDITORS = ["Martin Moré", "Pierre Moré", "Sébastien Moré"];
-  const PASSWORDS = { "Martin Moré": "martin@", "Pierre Moré": "pierre@", "Sébastien Moré": "sebastien@" };
+  const EDITORS = ["Martin Moré", "Pierre Moré", "Sébastien Moré", "Camille Fauveau"];
+  const PASSWORDS = { "Martin Moré": "martin@", "Pierre Moré": "pierre@", "Sébastien Moré": "sebastien@", "Camille Fauveau": "camille@" };
   const ADMIN = "Martin Moré"; // seul à voir les revenus
 
   const PRIX_MOIS = 50; // € par mois par client

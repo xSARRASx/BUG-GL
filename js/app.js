@@ -665,9 +665,9 @@
     $("#me").innerHTML = `Connecté en tant que <b>${escapeHtml(name)}</b>`;
     $("#who-modal").classList.add("hidden");
     const seoBtn = document.getElementById("btn-seo");
-    if (seoBtn) seoBtn.classList.toggle("hidden", !["Martin Moré", "Camille Fauveau"].includes(name));
+    if (seoBtn) seoBtn.classList.toggle("hidden", !["Martin Moré", "Camille Fauveau", "Sébastien Moré", "Pierre Moré"].includes(name));
     const blogBtn = document.getElementById("btn-blog");
-    if (blogBtn) blogBtn.classList.toggle("hidden", !["Martin Moré", "Pierre Moré", "Sébastien Moré"].includes(name));
+    if (blogBtn) blogBtn.classList.toggle("hidden", !["Martin Moré", "Pierre Moré", "Sébastien Moré", "Camille Fauveau"].includes(name));
     if (store && store.setPresence) store.setPresence(name);
   }
 
