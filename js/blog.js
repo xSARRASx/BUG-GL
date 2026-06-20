@@ -154,7 +154,9 @@
       end = ymToIndex(c.fin);
       if (end == null) end = dateToIndex(c.finAt || c.updatedAt || c.createdAt || Date.now());
     } else {
-      end = currentIndex();
+      // Client actif : on projette dans le futur (on suppose qu'il continue).
+      // La borne réelle est imposée par la fin de la période choisie (toIdx).
+      end = Number.MAX_SAFE_INTEGER;
     }
     const a = Math.max(start, fromIdx);
     const b = Math.min(end, toIdx);
@@ -517,6 +519,12 @@
     } else if (kind === "annee") {
       revFrom = now.getFullYear() * 12 + 0;   // janvier
       revTo = currentIndex();
+    } else if (kind === "annee-proj") {
+      revFrom = now.getFullYear() * 12 + 0;    // janvier
+      revTo = now.getFullYear() * 12 + 11;     // décembre (projection)
+    } else if (kind === "fin-annee") {
+      revFrom = currentIndex();                // ce mois-ci
+      revTo = now.getFullYear() * 12 + 11;     // jusqu'à décembre (projection)
     } else if (kind === "tout") {
       let min = currentIndex();
       Object.values(clients).forEach((c) => {

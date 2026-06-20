@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=16" />
+  <link rel="stylesheet" href="css/style.css?v=17" />
   <style>
     /* --- Badges statut blog --- */
     .badge.statut-actif   { background: rgba(46,204,143,0.14); color: var(--green); }
@@ -183,7 +183,9 @@
         </div>
         <div class="revenue-quick">
           <button class="chip" data-range="mois">Ce mois</button>
-          <button class="chip" data-range="annee">Cette année</button>
+          <button class="chip" data-range="annee">Cette année (à ce jour)</button>
+          <button class="chip" data-range="fin-annee">D'ici fin décembre 🔮</button>
+          <button class="chip" data-range="annee-proj">Année complète 🔮</button>
           <button class="chip" data-range="tout">Tout</button>
         </div>
       </div>
@@ -192,6 +194,7 @@
         <div><div class="rr-num" id="rev-months">0</div><div class="rr-lbl">Mois facturés (cumulés)</div></div>
         <div><div class="rr-num" id="rev-clients">0</div><div class="rr-lbl">Clients concernés</div></div>
       </div>
+      <small class="hint" style="margin-top:12px">🔮 Les mois à venir sont une <strong>estimation</strong> : ils supposent que tes clients actifs continuent (50 €/mois chacun). Choisis « Du » et « Au » librement pour voir n'importe quelle période, même future.</small>
     </section>
 
     <section class="filters">
@@ -371,7 +374,7 @@
     </div>
   </div>
 
-  <script src="js/firebase-config.js?v=16"></script>
-  <script src="js/blog.js?v=16"></script>
+  <script src="js/firebase-config.js?v=17"></script>
+  <script src="js/blog.js?v=17"></script>
 </body>
 </html>
