@@ -102,7 +102,9 @@ Mission : produire des articles HTML complets, optimisés **Yoast vert dès le 1
 - **1.4 Méta description** : **120-145 caractères** (Yoast compte en pixels Google ; capitales / m,w / accents prennent plus de place). 130 = zone verte sûre. Toujours le mot-clé exact, verbe d'action en début, bénéfice clair.
 - **1.5 Titre SEO** : **< 60 caractères**, mot-clé idéalement au début, promesse claire ou chiffre.
 - **1.6 Maillage interne** : min **2-3 liens internes** dès le 1er jet. Si URLs inconnues, placeholders `href="#article-XXX"` à lister en livraison. Toujours contextualiser le lien.
+  **🔴 ROUGE si absent (erreur confirmée en prod — capture Yoast Martin). RÈGLE BLOQUANTE : jamais 0 lien interne.**
 - **1.7 Alt image de couverture** : doit contenir le mot-clé exact (à régler dans WordPress → Médias → Texte alternatif). Le rappeler explicitement à l'utilisateur.
+- **1.8 Répartition de l'expression clé (check Yoast Premium)** : répartir le mot-clé **uniformément sur tout l'article** (intro, sections du milieu, conclusion ET FAQ), jamais concentré uniquement au début. Aucune longue zone de texte sans le mot-clé. Vérifier que les occurrences sont étalées du 1er au dernier tiers de l'article.
 
 ## 2. RÈGLES DE LISIBILITÉ YOAST (CRITIQUES)
 - **2.1 Mots de transition** (>30 % requis, Yoast FR STRICT) : viser **40-50 %** au comptage perso.
@@ -276,6 +278,8 @@ Persona compare 2 cards · Architecture hub · Donut chart audience · CTAs duo.
 - [ ] FAQ divider en `<h3>` JAMAIS en `<p>`
 - [ ] Méta description 120-145 caractères
 - [ ] Alt image rappelée explicitement à l'utilisateur
+- [ ] **Maillage interne présent (jamais 0 lien) — sinon ROUGE**
+- [ ] **Mot-clé réparti uniformément sur tout l'article (début + milieu + fin + FAQ)**
 
 ## 9. ERREURS YOAST RÉCURRENTES + FIX
 | Erreur Yoast | Cause | Fix |
@@ -288,7 +292,8 @@ Persona compare 2 cards · Architecture hub · Donut chart audience · CTAs duo.
 | Mots de transition < 30 % | Connecteurs hors liste officielle | Reformuler ~20 paragraphes avec la liste |
 | Voix passive > 10 % | Trop de « est X-é » / « peut être X-é » | Reformuler en sujet actif |
 | Mot-clé dans introduction | Manque dans le 1er `<p>` | Insérer dans le bandeau Dernière modification |
-| Maillage interne absent | Aucun lien interne | +2-3 liens vers articles du même site |
+| Maillage interne absent (🔴 ROUGE) | Aucun lien interne dans la page | +2-3 liens vers articles du même site, jamais 0 |
+| Répartition expression clé (⚪ Premium) | Mot-clé concentré au début | Étaler les occurrences sur tout l'article (début/milieu/fin/FAQ) |
 | Mot-clé dans alt images | Alt vide / sans mot-clé | À régler dans WP côté utilisateur |
 
 ## 10. WORKFLOW DE LIVRAISON (8 BLOCS, dans cet ordre)
@@ -383,6 +388,7 @@ print(f'Tirets longs: {clean.count(chr(0x2014))} (cible 0)')
 - ✅ Fiche client enrichie : champs Brief SEO (secteur, ville, mots-clés, ton, public) + Journal d'articles. Déployé.
 - ✅ Règle « même thème / texte régénéré » validée par Martin.
 - ✅ Livraison choisie = **copier-coller** (publication auto WordPress remise à plus tard).
+- ✅ Retour terrain Yoast intégré (capture Martin) : maillage interne = règle bloquante (jamais 0 lien) ; répartition uniforme du mot-clé sur tout l'article (check Premium). Cf. §1.6, §1.8, §8, §9.
 - ⬜ Premier article de démo : pas encore produit.
 - ⬜ Remplir les fiches élèves (mot-clé + ville + secteur minimum) pour activer le « go » autonome.
 - ⬜ (Option future) Récupération auto des fiches depuis Firebase au moment du « go ».
