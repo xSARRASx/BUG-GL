@@ -415,6 +415,11 @@
       updatedBy: me,
     };
     if (!data.nom) return;
+    if (!data.ville) {
+      alert("📍 La ville est obligatoire. Merci de la renseigner.");
+      $("#f-ville").focus();
+      return;
+    }
 
     if (id) {
       const wasTermine = sites[id] && sites[id].statut === "termine";
