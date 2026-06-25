@@ -407,8 +407,8 @@
     }));
   }
 
-  async function handleFileUpload(ev) {
-    const files = Array.from(ev.target.files);
+  async function addFiles(fileList) {
+    const files = Array.from(fileList || []);
     for (const file of files) {
       if (file.size > 3 * 1024 * 1024) {
         const go = confirm(`"${file.name}" fait ${(file.size / 1024 / 1024).toFixed(1)} Mo.\nC'est lourd pour Firebase (risque de lenteur). Continuer quand même ?`);
@@ -418,6 +418,9 @@
       editingFiles.push({ id: uid(), name: file.name, type: file.type, data });
     }
     renderFilesPreview();
+  }
+  async function handleFileUpload(ev) {
+    await addFiles(ev.target.files);
     ev.target.value = "";
   }
 
@@ -557,6 +560,19 @@
     $("#form").addEventListener("submit", submitForm);
     $("#f-files").addEventListener("change", handleFileUpload);
     $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
+
+    // Glisser-déposer de fichiers (plusieurs à la fois)
+    const dz = $("#f-dropzone");
+    if (dz) {
+      ["dragenter", "dragover"].forEach((evt) =>
+        dz.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); dz.classList.add("dragover"); }));
+      ["dragleave", "dragend"].forEach((evt) =>
+        dz.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); dz.classList.remove("dragover"); }));
+      dz.addEventListener("drop", (e) => {
+        e.preventDefault(); e.stopPropagation(); dz.classList.remove("dragover");
+        if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+      });
+    }
 
     $$("#f-status button").forEach((btn) => btn.addEventListener("click", () => setSeg("f-status", btn.dataset.val)));
 

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=17" />
+  <link rel="stylesheet" href="css/style.css?v=18" />
   <style>
     /* --- Badges statut blog --- */
     .badge.statut-actif   { background: rgba(46,204,143,0.14); color: var(--green); }
@@ -128,6 +128,10 @@
 
     .nav-back { font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; }
     .nav-back:hover { color: var(--text); }
+    .photos-input.dragover {
+      outline: 2px dashed var(--primary); outline-offset: 4px; border-radius: 10px;
+      background: rgba(108,92,231,0.08);
+    }
     .field input[type="month"] {
       width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--text);
       border-radius: 10px; padding: 11px 14px; font-size: 14px; font-family: inherit;
@@ -314,8 +318,8 @@
 
         <div class="field">
           <label>📎 Fichiers joints</label>
-          <div class="photos-input">
-            <label class="photo-add" for="f-files">📎 Ajouter des fichiers</label>
+          <div class="photos-input" id="f-dropzone">
+            <label class="photo-add" for="f-files">📎 Ajouter des fichiers ou glisser-déposer ici</label>
             <input type="file" id="f-files" multiple hidden />
             <div id="f-files-preview" class="detail-files" style="margin-top:10px;margin-bottom:0"></div>
           </div>
@@ -374,7 +378,7 @@
     </div>
   </div>
 
-  <script src="js/firebase-config.js?v=17"></script>
-  <script src="js/blog.js?v=17"></script>
+  <script src="js/firebase-config.js?v=18"></script>
+  <script src="js/blog.js?v=18"></script>
 </body>
 </html>

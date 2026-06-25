@@ -329,7 +329,7 @@
         // Recherche par TEXTE : titre, description, annonces concernées
         const q = raw.toLowerCase();
         arr = arr.filter((b) =>
-          [b.title, b.description, b.listings, b.channel, b.reservation].join(" ").toLowerCase().includes(q));
+          [b.title, b.description, b.listings, b.channel, b.reservation, b.assignee].join(" ").toLowerCase().includes(q));
       }
     }
 
@@ -424,6 +424,7 @@
         ${b.listings ? `<div class="card-listings">🏠 ${escapeHtml(b.listings)}</div>` : ""}
         ${(b.channel || b.reservation) ? `<div class="card-listings">${b.channel ? "📺 " + escapeHtml(b.channel) : ""}${b.channel && b.reservation ? " · " : ""}${b.reservation ? "🧾 " + escapeHtml(b.reservation) : ""}</div>` : ""}
         <p class="desc">${escapeHtml(b.description || "")}</p>
+        ${b.assignee ? `<div><span class="assignee-chip">👷 ${escapeHtml(b.assignee)}</span></div>` : ""}
         ${photos.length ? `<div class="card-photos">${photoHtml}</div>` : ""}
         <div class="card-foot">
           <span>${b.createdBy ? "par " + escapeHtml(b.createdBy) : ""} ${date ? "· " + date : ""}</span>
@@ -470,6 +471,7 @@
     setSeg("f-type", isEdit ? bug.type : "bug");
     setSeg("f-priority", isEdit ? bug.priority : "moyenne");
     setSeg("f-status", isEdit ? bug.status : "nontraite");
+    $("#f-assignee").value = isEdit ? (bug.assignee || "") : "";
     $("#f-listings").value = isEdit ? (bug.listings || "") : "";
     $("#f-channel").value = isEdit ? (bug.channel || "") : "";
     $("#f-reservation").value = isEdit ? (bug.reservation || "") : "";
@@ -508,6 +510,7 @@
         <span class="badge prio-${bug.priority}">${PRIO_LABEL[bug.priority]}</span>
         <span class="status-pill ${bug.status}">${STATUS_LABEL[bug.status]}</span>
       </div>
+      ${bug.assignee ? `<h4 class="detail-label">👷 À traiter par</h4><div class="detail-assignee">${escapeHtml(bug.assignee)}</div>` : ""}
       <h4 class="detail-label">Description</h4>
       <div class="detail-desc">${escapeHtml(bug.description || "")}</div>
       ${bug.listings ? `
@@ -569,13 +572,16 @@
 
   function closeDetail() { $("#detail-modal").classList.add("hidden"); }
 
-  async function handlePhotoUpload(ev) {
-    const files = Array.from(ev.target.files || []);
+  async function addPhotos(fileList) {
+    const files = Array.from(fileList || []).filter((f) => f.type.startsWith("image/"));
     for (const file of files) {
       try { editingPhotos.push(await compressImage(file)); }
       catch (e) { console.error("Image illisible", e); }
     }
     renderPhotosPreview();
+  }
+  async function handlePhotoUpload(ev) {
+    await addPhotos(ev.target.files);
     ev.target.value = "";
   }
 
@@ -595,6 +601,7 @@
       type: getSeg("f-type"),
       priority: getSeg("f-priority"),
       status: getSeg("f-status"),
+      assignee: $("#f-assignee").value,
       listings: $("#f-listings").value.trim(),
       channel: $("#f-channel").value,
       reservation: $("#f-reservation").value.trim(),
@@ -683,6 +690,19 @@
     $("#form").addEventListener("submit", submitForm);
     $("#f-photos").addEventListener("change", handlePhotoUpload);
     $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
+
+    // Glisser-déposer de photos (plusieurs à la fois)
+    const pdz = document.getElementById("f-photos-drop");
+    if (pdz) {
+      ["dragenter", "dragover"].forEach((evt) =>
+        pdz.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); pdz.classList.add("dragover"); }));
+      ["dragleave", "dragend"].forEach((evt) =>
+        pdz.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); pdz.classList.remove("dragover"); }));
+      pdz.addEventListener("drop", (e) => {
+        e.preventDefault(); e.stopPropagation(); pdz.classList.remove("dragover");
+        if (e.dataTransfer && e.dataTransfer.files) addPhotos(e.dataTransfer.files);
+      });
+    }
 
     $("#lightbox").addEventListener("click", () => $("#lightbox").classList.add("hidden"));
 

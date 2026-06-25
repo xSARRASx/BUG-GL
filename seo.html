@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=17" />
+  <link rel="stylesheet" href="css/style.css?v=18" />
   <style>
     /* --- Bandeau Loi Hoguet --- */
     .hoguet-banner {
@@ -118,6 +118,28 @@
 
     .nav-back { font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; }
     .nav-back:hover { color: var(--text); }
+
+    /* --- Bloc identifiants --- */
+    .creds-box {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 16px; margin-bottom: 22px;
+      display: flex; flex-direction: column; gap: 10px; font-size: 14px;
+    }
+    .cred-line { display: flex; align-items: center; gap: 10px; }
+    .cred-line .cred-label { color: var(--muted); min-width: 110px; font-weight: 600; font-size: 13px; }
+    .cred-line .cred-val { flex: 1; color: var(--text); font-family: monospace; word-break: break-all; }
+    .cred-line .btn-copy {
+      background: none; border: 1px solid var(--border); color: var(--primary);
+      border-radius: 7px; padding: 4px 10px; font-size: 12px; font-weight: 600;
+      cursor: pointer; font-family: inherit; white-space: nowrap;
+    }
+    .cred-line .btn-copy:hover { border-color: var(--primary); background: rgba(108,92,231,0.12); }
+
+    /* --- Glisser-déposer --- */
+    .photos-input.dragover {
+      outline: 2px dashed var(--primary); outline-offset: 4px; border-radius: 10px;
+      background: rgba(108,92,231,0.08);
+    }
   </style>
 </head>
 <body>
@@ -253,6 +275,26 @@
           <input type="email" id="f-email" placeholder="client@exemple.com" />
         </div>
 
+        <div class="client-box">
+          <div class="client-box-title">🔑 Accès au site <span class="optional">(optionnel)</span></div>
+          <div class="field">
+            <input type="text" id="f-login" placeholder="Identifiant" />
+          </div>
+          <div class="field">
+            <input type="text" id="f-pass" placeholder="Mot de passe" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-gmb">🗺️ Lien Google My Business <span class="optional">(optionnel)</span></label>
+          <input type="text" id="f-gmb" placeholder="https://… (fiche Google)" />
+        </div>
+
+        <div class="field">
+          <label for="f-drive">🔗 Lien Drive / fichier en ligne <span class="optional">(optionnel)</span></label>
+          <input type="text" id="f-drive" placeholder="https://drive.google.com/…" />
+        </div>
+
         <div class="field">
           <label>Statut</label>
           <div class="seg" id="f-status">
@@ -269,12 +311,12 @@
 
         <div class="field">
           <label>📎 Fichiers joints</label>
-          <div class="photos-input">
-            <label class="photo-add" for="f-files">📎 Ajouter des fichiers</label>
+          <div class="photos-input" id="f-dropzone">
+            <label class="photo-add" for="f-files">📎 Ajouter des fichiers ou glisser-déposer ici</label>
             <input type="file" id="f-files" multiple hidden />
             <div id="f-files-preview" class="detail-files" style="margin-top:10px;margin-bottom:0"></div>
           </div>
-          <small class="hint">PDF, Word, images… Évite les fichiers trop lourds (max ~2 Mo par fichier).</small>
+          <small class="hint">PDF, Word, images… Glisse tes fichiers directement dans la zone. Évite les fichiers trop lourds (max ~2 Mo par fichier).</small>
         </div>
 
         <div class="modal-foot">
@@ -329,7 +371,7 @@
     </div>
   </div>
 
-  <script src="js/firebase-config.js?v=17"></script>
-  <script src="js/seo.js?v=17"></script>
+  <script src="js/firebase-config.js?v=18"></script>
+  <script src="js/seo.js?v=18"></script>
 </body>
 </html>

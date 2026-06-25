@@ -368,6 +368,17 @@ input[type="search"] { min-width: 220px; }
 .seg button.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 
 .photos-input { display: flex; flex-direction: column; gap: 10px; }
+.photos-input.dragover {
+  outline: 2px dashed var(--primary); outline-offset: 4px; border-radius: 10px;
+  background: rgba(108,92,231,0.08);
+}
+.assignee-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 700; color: #a99bff;
+  background: rgba(108,92,231,0.15); border: 1px solid rgba(108,92,231,0.4);
+  padding: 4px 9px; border-radius: 999px; margin-top: 10px;
+}
+.detail-assignee { font-size: 15px; color: var(--text); margin-bottom: 22px; display: flex; align-items: center; gap: 8px; }
 .photo-add {
   display: inline-block; align-self: flex-start;
   background: var(--card); border: 1px dashed var(--border); color: var(--muted);

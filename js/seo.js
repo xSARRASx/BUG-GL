@@ -208,7 +208,7 @@
     if (searchText.trim()) {
       const q = searchText.trim().toLowerCase();
       arr = arr.filter((s) =>
-        [s.nom, s.url, s.ville, s.email, s.note].join(" ").toLowerCase().includes(q));
+        [s.nom, s.url, s.ville, s.email, s.note, s.login, s.gmb, s.drive].join(" ").toLowerCase().includes(q));
     }
 
     // Terminés en bas
@@ -283,6 +283,14 @@
       ${s.url ? `<h4 class="detail-label">🌐 URL</h4><div class="detail-url detail-desc"><a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.url)}</a></div>` : ""}
       ${s.ville ? `<h4 class="detail-label">📍 Ville</h4><div class="detail-desc">${escapeHtml(s.ville)}</div>` : ""}
       ${s.email ? `<h4 class="detail-label">✉️ E-mail</h4><div class="detail-desc"><a href="mailto:${escapeHtml(s.email)}" style="color:#a99bff">${escapeHtml(s.email)}</a></div>` : ""}
+      ${(s.login || s.pass) ? `
+        <h4 class="detail-label">🔑 Accès au site</h4>
+        <div class="creds-box">
+          ${s.login ? `<div class="cred-line"><span class="cred-label">Identifiant</span><span class="cred-val">${escapeHtml(s.login)}</span><button class="btn-copy" data-copy="${escapeHtml(s.login)}">📋 Copier</button></div>` : ""}
+          ${s.pass ? `<div class="cred-line"><span class="cred-label">Mot de passe</span><span class="cred-val">${escapeHtml(s.pass)}</span><button class="btn-copy" data-copy="${escapeHtml(s.pass)}">📋 Copier</button></div>` : ""}
+        </div>` : ""}
+      ${s.gmb ? `<h4 class="detail-label">🗺️ Google My Business</h4><div class="detail-desc"><a href="${escapeHtml(s.gmb)}" target="_blank" rel="noopener" style="color:#a99bff">${escapeHtml(s.gmb)}</a></div>` : ""}
+      ${s.drive ? `<h4 class="detail-label">🔗 Lien Drive / fichier</h4><div class="detail-desc"><a href="${escapeHtml(s.drive)}" target="_blank" rel="noopener" style="color:#a99bff">${escapeHtml(s.drive)}</a></div>` : ""}
       ${s.note ? `<h4 class="detail-label">📝 Note</h4><div class="detail-desc">${escapeHtml(s.note)}</div>` : ""}
       ${files.length ? `
         <h4 class="detail-label">📎 Fichiers joints</h4>
@@ -339,6 +347,10 @@
     $("#f-url").value   = isEdit ? (site.url    || "") : "";
     $("#f-ville").value = isEdit ? (site.ville  || "") : "";
     $("#f-email").value = isEdit ? (site.email  || "") : "";
+    $("#f-login").value = isEdit ? (site.login  || "") : "";
+    $("#f-pass").value  = isEdit ? (site.pass   || "") : "";
+    $("#f-gmb").value   = isEdit ? (site.gmb    || "") : "";
+    $("#f-drive").value = isEdit ? (site.drive  || "") : "";
     $("#f-note").value  = isEdit ? (site.note   || "") : "";
     editingFiles = isEdit && site.files ? Object.values(site.files) : [];
     renderFilesPreview();
@@ -364,8 +376,9 @@
     }));
   }
 
-  async function handleFileUpload(ev) {
-    const files = Array.from(ev.target.files);
+  // Ajoute une liste de fichiers (depuis l'input OU le glisser-déposer)
+  async function addFiles(fileList) {
+    const files = Array.from(fileList || []);
     for (const file of files) {
       if (file.size > 3 * 1024 * 1024) {
         const go = confirm(`"${file.name}" fait ${(file.size / 1024 / 1024).toFixed(1)} Mo.\nC'est lourd pour Firebase (risque de lenteur). Continuer quand même ?`);
@@ -375,6 +388,9 @@
       editingFiles.push({ id: uid(), name: file.name, type: file.type, data });
     }
     renderFilesPreview();
+  }
+  async function handleFileUpload(ev) {
+    await addFiles(ev.target.files);
     ev.target.value = "";
   }
 
@@ -389,6 +405,10 @@
       url:      $("#f-url").value.trim(),
       ville:    $("#f-ville").value.trim(),
       email:    $("#f-email").value.trim(),
+      login:    $("#f-login").value.trim(),
+      pass:     $("#f-pass").value,
+      gmb:      $("#f-gmb").value.trim(),
+      drive:    $("#f-drive").value.trim(),
       note:     $("#f-note").value.trim(),
       files:    editingFiles.reduce((acc, f) => { acc[f.id] = f; return acc; }, {}),
       updatedAt: Date.now(),
@@ -475,6 +495,19 @@
     $("#f-files").addEventListener("change", handleFileUpload);
     $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
 
+    // Glisser-déposer de fichiers (plusieurs à la fois)
+    const dz = $("#f-dropzone");
+    if (dz) {
+      ["dragenter", "dragover"].forEach((evt) =>
+        dz.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); dz.classList.add("dragover"); }));
+      ["dragleave", "dragend"].forEach((evt) =>
+        dz.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); dz.classList.remove("dragover"); }));
+      dz.addEventListener("drop", (e) => {
+        e.preventDefault(); e.stopPropagation(); dz.classList.remove("dragover");
+        if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+      });
+    }
+
     // Segs du formulaire
     ["f-activite", "f-carte", "f-status"].forEach((gid) => {
       $$(`#${gid} button`).forEach((btn) =>
@@ -489,8 +522,18 @@
       openModal(sites[detailSiteId]);
     });
 
-    // Téléchargement des fichiers (délégation sur detail-body)
+    // Copier identifiants + télécharger les fichiers (délégation sur detail-body)
     $("#detail-body").addEventListener("click", (e) => {
+      const copyBtn = e.target.closest(".btn-copy");
+      if (copyBtn) {
+        const txt = copyBtn.dataset.copy;
+        navigator.clipboard.writeText(txt).then(() => {
+          const old = copyBtn.textContent;
+          copyBtn.textContent = "✅ Copié";
+          setTimeout(() => { copyBtn.textContent = old; }, 1200);
+        }).catch(() => alert("Copie impossible : " + txt));
+        return;
+      }
       const btn = e.target.closest(".btn-dl");
       if (!btn) return;
       const s = sites[btn.dataset.sid];
