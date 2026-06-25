@@ -208,7 +208,7 @@
     if (searchText.trim()) {
       const q = searchText.trim().toLowerCase();
       arr = arr.filter((s) =>
-        [s.nom, s.url, s.ville, s.email, s.note, s.login, s.gmb, s.drive].join(" ").toLowerCase().includes(q));
+        [s.nom, s.url, s.ville, s.email, s.note, s.login, s.gmb, s.drive, s.adminUrl].join(" ").toLowerCase().includes(q));
     }
 
     // Terminés en bas
@@ -283,9 +283,10 @@
       ${s.url ? `<h4 class="detail-label">🌐 URL</h4><div class="detail-url detail-desc"><a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.url)}</a></div>` : ""}
       ${s.ville ? `<h4 class="detail-label">📍 Ville</h4><div class="detail-desc">${escapeHtml(s.ville)}</div>` : ""}
       ${s.email ? `<h4 class="detail-label">✉️ E-mail</h4><div class="detail-desc"><a href="mailto:${escapeHtml(s.email)}" style="color:#a99bff">${escapeHtml(s.email)}</a></div>` : ""}
-      ${(s.login || s.pass) ? `
+      ${(s.adminUrl || s.login || s.pass) ? `
         <h4 class="detail-label">🔑 Accès au site</h4>
         <div class="creds-box">
+          ${s.adminUrl ? `<div class="cred-line"><span class="cred-label">Lien admin</span><span class="cred-val"><a href="${escapeHtml(s.adminUrl)}" target="_blank" rel="noopener" style="color:#a99bff">${escapeHtml(s.adminUrl)}</a></span><button class="btn-copy" data-copy="${escapeHtml(s.adminUrl)}">📋 Copier</button></div>` : ""}
           ${s.login ? `<div class="cred-line"><span class="cred-label">Identifiant</span><span class="cred-val">${escapeHtml(s.login)}</span><button class="btn-copy" data-copy="${escapeHtml(s.login)}">📋 Copier</button></div>` : ""}
           ${s.pass ? `<div class="cred-line"><span class="cred-label">Mot de passe</span><span class="cred-val">${escapeHtml(s.pass)}</span><button class="btn-copy" data-copy="${escapeHtml(s.pass)}">📋 Copier</button></div>` : ""}
         </div>` : ""}
@@ -347,6 +348,7 @@
     $("#f-url").value   = isEdit ? (site.url    || "") : "";
     $("#f-ville").value = isEdit ? (site.ville  || "") : "";
     $("#f-email").value = isEdit ? (site.email  || "") : "";
+    $("#f-admin-url").value = isEdit ? (site.adminUrl || "") : "";
     $("#f-login").value = isEdit ? (site.login  || "") : "";
     $("#f-pass").value  = isEdit ? (site.pass   || "") : "";
     $("#f-gmb").value   = isEdit ? (site.gmb    || "") : "";
@@ -405,6 +407,7 @@
       url:      $("#f-url").value.trim(),
       ville:    $("#f-ville").value.trim(),
       email:    $("#f-email").value.trim(),
+      adminUrl: $("#f-admin-url").value.trim(),
       login:    $("#f-login").value.trim(),
       pass:     $("#f-pass").value,
       gmb:      $("#f-gmb").value.trim(),
