@@ -19,6 +19,10 @@
     "blog": {
       ".read": true,
       ".write": true
+    },
+    "archive": {
+      ".read": true,
+      ".write": true
     }
   }
 }

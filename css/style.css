@@ -379,6 +379,20 @@ input[type="search"] { min-width: 220px; }
   padding: 4px 9px; border-radius: 999px; margin-top: 10px;
 }
 .detail-assignee { font-size: 15px; color: var(--text); margin-bottom: 22px; display: flex; align-items: center; gap: 8px; }
+
+/* Corbeille / Archive */
+.arch-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px; margin-bottom: 10px;
+}
+.arch-info { min-width: 0; }
+.arch-title { font-weight: 600; font-size: 14px; }
+.arch-meta { color: var(--muted); font-size: 12px; margin-top: 3px; }
+.arch-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.arch-actions .btn-card { flex: none; }
+.arch-del { color: var(--danger); }
+.arch-del:hover { border-color: var(--danger); }
 .photo-add {
   display: inline-block; align-self: flex-start;
   background: var(--card); border: 1px dashed var(--border); color: var(--muted);

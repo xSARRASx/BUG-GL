@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=21" />
+  <link rel="stylesheet" href="css/style.css?v=22" />
 </head>
 <body>
   <!-- Bandeau d'état (mode local / connecté) -->
@@ -29,6 +29,7 @@
       <button id="btn-switch" class="btn btn-ghost" title="Changer de profil">🔄 Changer</button>
       <a id="btn-seo" href="seo.html" class="btn btn-ghost hidden">📊 SEO</a>
       <a id="btn-blog" href="blog.html" class="btn btn-ghost hidden">📝 Blog</a>
+      <button id="btn-archive" class="btn btn-ghost" title="Corbeille — bugs réglés depuis 7 jours">🗄️ Corbeille</button>
       <button id="btn-add" class="btn btn-primary">+ Nouveau</button>
     </div>
   </header>
@@ -263,12 +264,26 @@
     </div>
   </div>
 
+  <!-- Corbeille / Archive -->
+  <div id="archive-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>🗄️ Corbeille</h2>
+        <button class="modal-close" id="archive-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="who-intro">Les bugs réglés depuis <strong>7 jours ou plus</strong> arrivent ici automatiquement. Tu peux les <strong>récupérer</strong> à tout moment, ou les supprimer définitivement.</p>
+        <div id="archive-body"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Visionneuse de photo plein écran -->
   <div id="lightbox" class="lightbox hidden"><img id="lightbox-img" src="" alt="" /></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-  <script src="js/firebase-config.js?v=21"></script>
-  <script src="js/email-config.js?v=21"></script>
-  <script src="js/app.js?v=21"></script>
+  <script src="js/firebase-config.js?v=22"></script>
+  <script src="js/email-config.js?v=22"></script>
+  <script src="js/app.js?v=22"></script>
 </body>
 </html>

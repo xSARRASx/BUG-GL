@@ -91,6 +91,13 @@
     add(bug) { const d = this._read(); const id = uid(); d[id] = { ...bug, id }; this._write(d); }
     update(id, patch) { const d = this._read(); if (d[id]) { d[id] = { ...d[id], ...patch }; this._write(d); } }
     remove(id) { const d = this._read(); delete d[id]; this._write(d); }
+    // --- Archive (corbeille) ---
+    _readArch() { try { return JSON.parse(localStorage.getItem("bugtracker_archive")) || {}; } catch { return {}; } }
+    _writeArch(d) { localStorage.setItem("bugtracker_archive", JSON.stringify(d)); this.archListeners.forEach((cb) => cb(d)); }
+    subscribeArchive(cb) { (this.archListeners = this.archListeners || []).push(cb); cb(this._readArch()); }
+    archive(bug) { const a = this._readArch(); a[bug.id] = { ...bug, archivedAt: Date.now() }; localStorage.setItem("bugtracker_archive", JSON.stringify(a)); this.remove(bug.id); this.archListeners && this.archListeners.forEach((cb) => cb(a)); }
+    restore(id) { const a = this._readArch(); const bug = a[id]; if (!bug) return; delete bug.archivedAt; const d = this._read(); d[id] = bug; this._write(d); delete a[id]; this._writeArch(a); }
+    removeArchive(id) { const a = this._readArch(); delete a[id]; this._writeArch(a); }
     async reserveTicket(floor = 0) {
       const key = "bugtracker_lastTicket";
       const cur = parseInt(localStorage.getItem(key) || "0", 10);
@@ -120,6 +127,30 @@
     remove(id) {
       const { ref, remove } = this.fns;
       remove(ref(this.db, "bugs/" + id));
+    }
+    // --- Archive (corbeille) ---
+    subscribeArchive(cb) {
+      const { ref, onValue } = this.fns;
+      onValue(ref(this.db, "archive"), (snap) => cb(snap.val() || {}));
+    }
+    archive(bug) {
+      const { ref, set, remove } = this.fns;
+      set(ref(this.db, "archive/" + bug.id), { ...bug, archivedAt: Date.now() });
+      remove(ref(this.db, "bugs/" + bug.id));
+    }
+    restore(id) {
+      const { ref, onValue, set, remove } = this.fns;
+      onValue(ref(this.db, "archive/" + id), (snap) => {
+        const bug = snap.val();
+        if (!bug) return;
+        delete bug.archivedAt;
+        set(ref(this.db, "bugs/" + id), bug);
+        remove(ref(this.db, "archive/" + id));
+      }, { onlyOnce: true });
+    }
+    removeArchive(id) {
+      const { ref, remove } = this.fns;
+      remove(ref(this.db, "archive/" + id));
     }
     // Compteur central atomique : garantit un numéro unique et toujours croissant
     async reserveTicket(floor = 0) {
@@ -266,12 +297,33 @@
   //  État de l'affichage
   // -------------------------------------------------------------
   let bugs = {};
+  let archived = {};
   let filterStatus = "all";
   let filterType = "all";
   let filterPriority = "all";
   let searchText = "";
   let sortMode = "recent";
   let editingPhotos = [];
+
+  // -------------------------------------------------------------
+  //  Archivage automatique : les bugs traités depuis 7 jours
+  //  ou plus partent dans la corbeille (récupérables).
+  // -------------------------------------------------------------
+  const ARCHIVE_DELAY = 7 * 24 * 60 * 60 * 1000; // 7 jours en millisecondes
+  let archiving = false;
+  function autoArchive() {
+    if (archiving || !store || !store.archive) return;
+    const now = Date.now();
+    const toArchive = Object.values(bugs).filter((b) => {
+      if (b.status !== "traite") return false;
+      const when = b.traiteAt || b.updatedAt || b.createdAt || 0;
+      return when && (now - when) >= ARCHIVE_DELAY;
+    });
+    if (toArchive.length === 0) return;
+    archiving = true;
+    try { toArchive.forEach((b) => store.archive(b)); }
+    finally { setTimeout(() => { archiving = false; }, 1500); }
+  }
 
   // -------------------------------------------------------------
   //  Rendu
@@ -564,7 +616,11 @@
       btn.addEventListener("click", () => {
         const newStatus = btn.dataset.status;
         const comment = $("#detail-comment").value.trim();
-        store.update(detailBugId, { status: newStatus, comment, updatedAt: Date.now(), updatedBy: me });
+        const patch = { status: newStatus, comment, updatedAt: Date.now(), updatedBy: me };
+        // Date de résolution (sert à l'archivage auto au bout de 7 jours)
+        if (newStatus === "traite" && bug.status !== "traite") patch.traiteAt = Date.now();
+        if (newStatus !== "traite") patch.traiteAt = null;
+        store.update(detailBugId, patch);
         if (newStatus === "traite" && bug.status !== "traite") notify("traite", { ...bug, status: newStatus, comment }, me);
         closeDetail(); // on ferme et on revient à la liste
       }));
@@ -626,6 +682,9 @@
 
     if (id) {
       const wasTraite = bugs[id] && bugs[id].status === "traite";
+      // Date de résolution (sert à l'archivage auto au bout de 7 jours)
+      if (data.status === "traite" && !wasTraite) data.traiteAt = Date.now();
+      if (data.status !== "traite") data.traiteAt = null;
       store.update(id, data);
       if (data.status === "traite" && !wasTraite) notify("traite", { ...bugs[id], ...data }, me);
     } else {
@@ -681,10 +740,61 @@
   }
 
   // -------------------------------------------------------------
+  //  Corbeille / Archive (bugs réglés depuis 7 jours)
+  // -------------------------------------------------------------
+  function visibleArchived() {
+    const all = Object.values(archived);
+    if (isRestricted(me)) return all.filter((b) => b.createdBy === me);
+    return all;
+  }
+  function openArchive() { renderArchive(); $("#archive-modal").classList.remove("hidden"); }
+  function closeArchive() { $("#archive-modal").classList.add("hidden"); }
+
+  function renderArchive() {
+    const body = $("#archive-body");
+    if (!body) return;
+    const arr = visibleArchived().sort((a, b) => (b.archivedAt || 0) - (a.archivedAt || 0));
+    if (arr.length === 0) {
+      body.innerHTML = `<p class="who-intro">La corbeille est vide. Les bugs réglés depuis 7 jours ou plus arrivent ici automatiquement.</p>`;
+      return;
+    }
+    body.innerHTML = arr.map((b) => {
+      const d = b.archivedAt ? new Date(b.archivedAt).toLocaleDateString("fr-FR") : "";
+      return `
+        <div class="arch-row" data-id="${b.id}">
+          <div class="arch-info">
+            <div class="arch-title">${b.ticket ? fmtTicket(b.ticket) + " · " : ""}${escapeHtml(b.title)}</div>
+            <div class="arch-meta">${b.createdBy ? "par " + escapeHtml(b.createdBy) : ""}${d ? " · archivé le " + d : ""}</div>
+          </div>
+          <div class="arch-actions">
+            <button class="btn-card" data-act="restore">♻️ Récupérer</button>
+            <button class="btn-card arch-del" data-act="del">🗑️ Supprimer</button>
+          </div>
+        </div>`;
+    }).join("");
+
+    $$("#archive-body .arch-row").forEach((row) => {
+      const id = row.dataset.id;
+      row.querySelector('[data-act="restore"]').addEventListener("click", () => {
+        store.restore(id);
+      });
+      row.querySelector('[data-act="del"]').addEventListener("click", () => {
+        if (confirm("Supprimer DÉFINITIVEMENT ce bug ? (impossible à récupérer ensuite)")) store.removeArchive(id);
+      });
+    });
+  }
+
+  // -------------------------------------------------------------
   //  Branchement des événements
   // -------------------------------------------------------------
   function wireEvents() {
     $("#btn-add").addEventListener("click", () => openModal(null));
+    const ba = document.getElementById("btn-archive");
+    if (ba) ba.addEventListener("click", openArchive);
+    const ac = document.getElementById("archive-close");
+    if (ac) ac.addEventListener("click", closeArchive);
+    const am = document.getElementById("archive-modal");
+    if (am) am.addEventListener("click", (e) => { if (e.target.id === "archive-modal") closeArchive(); });
     $("#btn-switch").addEventListener("click", askIdentity);
     $("#modal-close").addEventListener("click", closeModal);
     $("#btn-cancel").addEventListener("click", closeModal);
@@ -758,7 +868,8 @@
     banner.classList.remove("hidden");
     wireEvents();
 
-    store.subscribe((data) => { bugs = data || {}; maybeBackfillTickets(); render(); });
+    store.subscribe((data) => { bugs = data || {}; maybeBackfillTickets(); autoArchive(); render(); });
+    if (store.subscribeArchive) store.subscribeArchive((data) => { archived = data || {}; renderArchive(); });
     if (store.subscribePresence) store.subscribePresence(renderPresence);
 
     if (me) setIdentity(me);
