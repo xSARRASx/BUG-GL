@@ -301,6 +301,7 @@
   let filterStatus = "all";
   let filterType = "all";
   let filterPriority = "all";
+  let filterAssignee = "all";
   let searchText = "";
   let sortMode = "recent";
   let editingPhotos = [];
@@ -369,6 +370,8 @@
     if (filterStatus !== "all") arr = arr.filter((b) => b.status === filterStatus);
     if (filterType !== "all") arr = arr.filter((b) => b.type === filterType);
     if (filterPriority !== "all") arr = arr.filter((b) => b.priority === filterPriority);
+    if (filterAssignee !== "all") arr = arr.filter((b) =>
+      filterAssignee === "__none__" ? !b.assignee : b.assignee === filterAssignee);
     if (searchText.trim()) {
       const raw = searchText.trim();
       const num = raw.replace(/^#/, ""); // "#12" ou "12"
@@ -848,6 +851,7 @@
       $$("#filter-priority .chip").forEach((x) => x.classList.remove("active"));
       c.classList.add("active"); filterPriority = c.dataset.priority; render();
     }));
+    $("#filter-assignee").addEventListener("change", (e) => { filterAssignee = e.target.value; render(); });
     $("#search").addEventListener("input", (e) => { searchText = e.target.value; render(); });
     $("#sort").addEventListener("change", (e) => { sortMode = e.target.value; render(); });
 
