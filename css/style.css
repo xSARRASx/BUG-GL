@@ -378,6 +378,8 @@ input[type="search"] { min-width: 220px; }
   background: rgba(108,92,231,0.15); border: 1px solid rgba(108,92,231,0.4);
   padding: 4px 9px; border-radius: 999px; margin-top: 10px;
 }
+.badge.badge-assignee { background: rgba(108,92,231,0.2); color: #c0b6ff; text-transform: none; letter-spacing: 0; }
+.badge.badge-unassigned { background: rgba(154,160,189,0.12); color: var(--muted); text-transform: none; letter-spacing: 0; }
 .detail-assignee { font-size: 15px; color: var(--text); margin-bottom: 22px; display: flex; align-items: center; gap: 8px; }
 
 /* Corbeille / Archive */

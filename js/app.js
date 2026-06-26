@@ -475,13 +475,13 @@
             ${b.ticket ? `<span class="ticket">${fmtTicket(b.ticket)}</span>` : ""}
             <span class="badge type-${b.type}">${TYPE_LABEL[b.type]}</span>
             <span class="badge prio-${b.priority}">${PRIO_LABEL[b.priority]}</span>
+            ${b.assignee ? `<span class="badge badge-assignee">👷 ${escapeHtml(b.assignee)}</span>` : `<span class="badge badge-unassigned">👤 Non assigné</span>`}
           </div>
         </div>
         <h3>${escapeHtml(b.title)}</h3>
         ${b.listings ? `<div class="card-listings">🏠 ${escapeHtml(b.listings)}</div>` : ""}
         ${(b.channel || b.reservation) ? `<div class="card-listings">${b.channel ? "📺 " + escapeHtml(b.channel) : ""}${b.channel && b.reservation ? " · " : ""}${b.reservation ? "🧾 " + escapeHtml(b.reservation) : ""}</div>` : ""}
         <p class="desc">${escapeHtml(b.description || "")}</p>
-        ${b.assignee ? `<div><span class="assignee-chip">👷 ${escapeHtml(b.assignee)}</span></div>` : ""}
         ${photos.length ? `<div class="card-photos">${photoHtml}</div>` : ""}
         <div class="card-foot">
           <span>${b.createdBy ? "par " + escapeHtml(b.createdBy) : ""} ${date ? "· " + date : ""}</span>
