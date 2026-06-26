@@ -226,6 +226,8 @@
     if (!cfg.notifySelf) recipients = recipients.filter(([name]) => name !== actor);
     // Les utilisateurs restreints ne reçoivent QUE pour les tickets qu'ils ont créés
     recipients = recipients.filter(([name]) => !isRestricted(name) || bug.createdBy === name);
+    // Mail « bug réglé » : uniquement la personne qui a créé le bug
+    if (kind === "traite") recipients = recipients.filter(([name]) => name === bug.createdBy);
     if (recipients.length === 0) return;
 
     const prio = PRIO_LABEL[bug.priority] || bug.priority;
