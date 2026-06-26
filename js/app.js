@@ -475,8 +475,13 @@
             ${b.ticket ? `<span class="ticket">${fmtTicket(b.ticket)}</span>` : ""}
             <span class="badge type-${b.type}">${TYPE_LABEL[b.type]}</span>
             <span class="badge prio-${b.priority}">${PRIO_LABEL[b.priority]}</span>
-            ${b.assignee ? `<span class="badge badge-assignee">👷 ${escapeHtml(b.assignee)}</span>` : `<span class="badge badge-unassigned">👤 Non assigné</span>`}
           </div>
+        </div>
+        <div class="assignee-banner ${b.assignee ? "is-assigned" : "is-unassigned"}">
+          ${b.assignee
+            ? `<span class="ab-avatar" style="background:${colorFor(b.assignee)}">${initials(b.assignee)}</span>
+               <span class="ab-text">À traiter par <b>${escapeHtml(b.assignee)}</b></span>`
+            : `<span class="ab-text">👤 Non assigné</span>`}
         </div>
         <h3>${escapeHtml(b.title)}</h3>
         ${b.listings ? `<div class="card-listings">🏠 ${escapeHtml(b.listings)}</div>` : ""}

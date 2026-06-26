@@ -380,6 +380,26 @@ input[type="search"] { min-width: 220px; }
 }
 .badge.badge-assignee { background: rgba(108,92,231,0.2); color: #c0b6ff; text-transform: none; letter-spacing: 0; }
 .badge.badge-unassigned { background: rgba(154,160,189,0.12); color: var(--muted); text-transform: none; letter-spacing: 0; }
+
+/* Bande d'assignation bien visible */
+.assignee-banner {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 12px; padding: 9px 12px; border-radius: 10px;
+  font-size: 14px; font-weight: 600;
+}
+.assignee-banner.is-assigned {
+  background: linear-gradient(135deg, rgba(108,92,231,0.28), rgba(108,92,231,0.14));
+  border: 1px solid rgba(108,92,231,0.55); color: #d6cfff;
+}
+.assignee-banner.is-unassigned {
+  background: rgba(154,160,189,0.08); border: 1px dashed var(--border); color: var(--muted);
+}
+.assignee-banner .ab-text b { color: #fff; font-weight: 800; }
+.assignee-banner .ab-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; flex-shrink: 0;
+  font-size: 12px; font-weight: 800; color: #fff;
+}
 .detail-assignee { font-size: 15px; color: var(--text); margin-bottom: 22px; display: flex; align-items: center; gap: 8px; }
 
 /* Corbeille / Archive */
