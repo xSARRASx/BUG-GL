@@ -744,6 +744,8 @@
     if (seoBtn) seoBtn.classList.toggle("hidden", !["Martin Moré", "Camille Fauveau", "Sébastien Moré", "Pierre Moré"].includes(name));
     const blogBtn = document.getElementById("btn-blog");
     if (blogBtn) blogBtn.classList.toggle("hidden", !["Martin Moré", "Pierre Moré", "Sébastien Moré", "Camille Fauveau"].includes(name));
+    const clientsBtn = document.getElementById("btn-clients");
+    if (clientsBtn) clientsBtn.classList.toggle("hidden", !["Martin Moré", "Camille Fauveau"].includes(name));
     if (store && store.setPresence) store.setPresence(name);
   }
 

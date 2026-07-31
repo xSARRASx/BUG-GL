@@ -23,6 +23,10 @@
     "archive": {
       ".read": true,
       ".write": true
+    },
+    "clients": {
+      ".read": true,
+      ".write": true
     }
   }
 }

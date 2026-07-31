@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suivi Clients Web — Guest Lucky</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  :root{
+    --bg:#f6f7f9; --surface:#ffffff; --ink:#16181d; --muted:#68707f; --line:#e3e6ea;
+    --head:#141821; --head-ink:#ffffff; --head-muted:#9aa3b2;
+    --accent:#2f5fde; --accent-soft:#eef2fd;
+    --pos:#177245; --neg:#b42318;
+    --dot-a-faire:#98a2b3; --dot-en_cours:#d99000; --dot-attente_client:#2f5fde;
+    --dot-termine_modifs:#7a5af8; --dot-termine:#1a9e5c;
+    --shadow:0 1px 2px rgba(16,24,40,.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#101216; --surface:#181b21; --ink:#e8eaee; --muted:#9199a6; --line:#272b33;
+      --head:#0c0e12; --head-ink:#f2f4f7; --head-muted:#828b99;
+      --accent:#6b8ff2; --accent-soft:#1d2434;
+      --pos:#4cc38a; --neg:#f08a80;
+      --shadow:none;
+    }
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    font-size:13.5px;line-height:1.5}
+  a{color:inherit}
+  .hidden{display:none !important}
+  svg.ic{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;flex:0 0 auto}
+  .wrap{max-width:1500px;margin:0 auto;padding:0 24px 56px}
+
+  /* bandeau d'état Firebase */
+  .status-banner{padding:9px 24px;font-size:.8rem;font-weight:600;text-align:center}
+  .status-banner.live{background:rgba(26,158,92,.14);color:var(--pos)}
+  .status-banner.local{background:rgba(217,144,0,.14);color:#d99000}
+  .status-banner.error{background:rgba(180,35,24,.14);color:var(--neg)}
+
+  header.top{background:var(--head);color:var(--head-ink);border-bottom:1px solid var(--line)}
+  header.top .inner{max-width:1500px;margin:0 auto;padding:20px 24px;
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header.top h1{margin:0;font-size:1.15rem;font-weight:650;letter-spacing:-.01em}
+  header.top p{margin:0;color:var(--head-muted);font-size:.85rem;flex:1}
+  header.top .who{color:var(--head-muted);font-size:.8rem;font-weight:600}
+  header.top .who b{color:var(--head-ink)}
+
+  .btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);
+    background:var(--surface);color:var(--ink);border-radius:8px;padding:8px 14px;
+    font:inherit;font-size:.82rem;font-weight:650;cursor:pointer;white-space:nowrap;text-decoration:none}
+  .btn:hover{border-color:var(--accent)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{filter:brightness(1.07)}
+  .btn.sm{padding:4px 10px;font-size:.74rem;border-radius:7px}
+  .btn.danger{color:var(--neg);border-color:var(--neg);background:transparent}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:22px 0 18px}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    padding:14px 16px;box-shadow:var(--shadow)}
+  .kpi.click{cursor:pointer}
+  .kpi.click:hover{border-color:var(--accent)}
+  .kpi.active{border-color:var(--accent);background:var(--accent-soft)}
+  .kpi .lab{display:flex;align-items:center;gap:7px;font-size:.68rem;text-transform:uppercase;
+    letter-spacing:.07em;color:var(--muted);font-weight:600}
+  .kpi .val{font-size:1.4rem;font-weight:650;margin-top:6px;
+    font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .kpi .val.pos{color:var(--pos)} .kpi .val.neg{color:var(--neg)}
+
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 20px}
+  .search{position:relative;flex:1 1 240px;min-width:210px}
+  .search svg.ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted)}
+  .search input{width:100%;padding:9px 12px 9px 36px;border:1px solid var(--line);border-radius:8px;
+    font-size:13.5px;background:var(--surface);color:var(--ink);outline:none}
+  .search input:focus{border-color:var(--accent)}
+  .search input::placeholder{color:var(--muted)}
+  .msel{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--line);
+    border-radius:8px;background:var(--surface);color:var(--ink)}
+  .msel svg.ic{color:var(--muted)}
+  .msel select{border:0;background:transparent;color:var(--ink);font:inherit;font-weight:600;
+    outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;padding-right:16px}
+  .msel select option{background:var(--surface);color:var(--ink)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+  .seg button{border:0;background:transparent;color:var(--muted);padding:9px 13px;font:inherit;
+    font-size:.8rem;font-weight:600;cursor:pointer;border-right:1px solid var(--line);white-space:nowrap}
+  .seg button:last-child{border-right:0}
+  .seg button:hover{color:var(--ink)}
+  .seg button.active{background:var(--head);color:var(--head-ink)}
+
+  h2.sec{margin:26px 2px 12px;font-size:.78rem;font-weight:650;text-transform:uppercase;
+    letter-spacing:.08em;color:var(--muted)}
+
+  .board{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+  .pcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    padding:16px;box-shadow:var(--shadow);cursor:pointer}
+  .pcard:hover{border-color:var(--accent)}
+  .pcard .rank{font-size:.68rem;font-weight:650;color:var(--accent);letter-spacing:.08em}
+  .pcard h3{margin:6px 0 2px;font-size:.98rem;font-weight:650}
+  .pcard .dom{color:var(--muted);font-size:.8rem;word-break:break-all}
+  .pcard .meta{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px;align-items:center}
+  .pcard .next{margin-top:11px;padding-top:10px;border-top:1px solid var(--line);
+    font-size:.8rem;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .pcard .next b{color:var(--ink);font-weight:600}
+
+  .month{margin-bottom:26px}
+  .mhead{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:0 2px 10px}
+  .mhead h2{margin:0;font-size:1.02rem;font-weight:650;text-transform:capitalize;letter-spacing:-.01em}
+  .pnl{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;align-items:center}
+  .pnl .b{background:var(--surface);border:1px solid var(--line);border-radius:8px;
+    padding:5px 12px;font-size:.8rem;font-weight:650;font-variant-numeric:tabular-nums;
+    display:inline-flex;align-items:center;gap:8px}
+  .pnl .b span.t{color:var(--muted);font-weight:600;text-transform:uppercase;
+    font-size:.62rem;letter-spacing:.07em}
+  .pos{color:var(--pos)} .neg{color:var(--neg)}
+
+  .tblwrap{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    overflow-x:auto;box-shadow:var(--shadow)}
+  table{width:100%;border-collapse:collapse;min-width:1150px}
+  th,td{padding:11px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+  tbody tr:last-child td{border-bottom:0}
+  th{font-size:.66rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);
+    font-weight:650;background:var(--surface);position:sticky;top:0;z-index:1}
+  tbody tr{cursor:pointer}
+  tbody tr:hover td{background:var(--accent-soft)}
+  .cl{font-weight:650}
+  .dom a{color:var(--accent);text-decoration:none;font-size:.8rem;word-break:break-all}
+  .dom a:hover{text-decoration:underline}
+  .sub{color:var(--muted);font-size:.75rem}
+  .status{display:inline-flex;align-items:center;gap:7px;font-size:.8rem;font-weight:600;white-space:nowrap}
+  .status .dot{width:7px;height:7px;border-radius:50%}
+  .tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.72rem;font-weight:600;
+    border:1px solid;white-space:nowrap;background:transparent}
+  .num{font-weight:650;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .wpbtn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--accent);
+    color:var(--accent);border-radius:7px;padding:4px 10px;font-size:.75rem;font-weight:650;
+    text-decoration:none}
+  .wpbtn:hover{background:var(--accent-soft)}
+  .notes{max-width:240px;font-size:.78rem;color:var(--muted)}
+  .notes .act{color:var(--ink);font-weight:550;display:-webkit-box;-webkit-line-clamp:2;
+    -webkit-box-orient:vertical;overflow:hidden}
+  .notes .more{color:var(--accent);font-size:.72rem;font-weight:650;margin-top:3px}
+  .prio-b{display:inline-block;min-width:22px;text-align:center;border:1px solid var(--accent);
+    color:var(--accent);border-radius:6px;font-weight:650;font-size:.75rem;padding:1px 4px}
+  .empty{padding:44px;text-align:center;color:var(--muted)}
+  footer{margin-top:28px;text-align:center;color:var(--muted);font-size:.75rem;line-height:1.8}
+  footer code{background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+
+  /* ---------- fiche (modal) ---------- */
+  .ov{position:fixed;inset:0;background:rgba(8,10,14,.55);display:none;
+    align-items:flex-start;justify-content:center;padding:36px 16px;overflow:auto;z-index:50}
+  .ov.open{display:flex}
+  .modal{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    max-width:780px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .modal h2{margin:0 0 4px;font-size:1.1rem;font-weight:650}
+  .modal .hint{color:var(--muted);font-size:.78rem;margin:0 0 16px}
+  .fgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px 14px}
+  .fld.full{grid-column:1/-1}
+  .fld label{display:block;font-size:.64rem;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--muted);font-weight:650;margin-bottom:5px}
+  .fld input,.fld select,.fld textarea{width:100%;padding:8px 10px;border:1px solid var(--line);
+    border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;outline:none}
+  .fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--accent)}
+  .fld textarea{resize:vertical}
+  .fld .chk{display:flex;align-items:center;gap:8px;padding:8px 0;font-size:.85rem;font-weight:600}
+  .fld .chk input{width:auto}
+  .mfoot{display:flex;gap:10px;margin-top:20px;align-items:center}
+  .mfoot .sp{flex:1}
+  .sep{grid-column:1/-1;border-top:1px solid var(--line);margin:6px 0 2px;padding-top:10px;
+    font-size:.66rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:650}
+
+  .toast{position:fixed;bottom:20px;right:20px;background:var(--head);color:var(--head-ink);
+    padding:10px 18px;border-radius:9px;font-size:.82rem;font-weight:600;opacity:0;
+    transition:opacity .25s;pointer-events:none;z-index:60}
+  .toast.show{opacity:1}
+
+  /* ---------- porte d'entrée (identité + mot de passe) ---------- */
+  .gate{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;
+    justify-content:center;padding:24px;z-index:80}
+  .gate .box{background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:28px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.15)}
+  .gate h2{margin:0 0 6px;font-size:1.15rem;font-weight:650}
+  .gate p{margin:0 0 18px;color:var(--muted);font-size:.83rem}
+  .gate .names{display:flex;flex-direction:column;gap:8px}
+  .gate .names button{width:100%;text-align:left;padding:11px 14px;border:1px solid var(--line);
+    border-radius:9px;background:var(--bg);color:var(--ink);font:inherit;font-weight:650;cursor:pointer}
+  .gate .names button:hover{border-color:var(--accent)}
+  .gate .names button.selected{border-color:var(--accent);background:var(--accent-soft)}
+  .gate .pwd{margin-top:16px}
+  .gate .pwd input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;
+    background:var(--bg);color:var(--ink);font:inherit;outline:none;margin-bottom:10px}
+  .gate .pwd input:focus{border-color:var(--accent)}
+  .gate .err{color:var(--neg);font-size:.78rem;font-weight:600;display:none;margin-bottom:8px}
+  .gate .back{display:block;margin-top:18px;text-align:center;font-size:.8rem;
+    color:var(--muted);text-decoration:none}
+</style>
+</head>
+<body>
+
+<!-- ================= Porte d'entrée ================= -->
+<div class="gate" id="gate">
+  <div class="box">
+    <h2>Suivi Clients Web</h2>
+    <p>Section réservée à Martin et Camille. Choisis ton nom puis entre ton mot de passe.</p>
+    <div class="names" id="gate-names">
+      <button data-name="Martin Moré">Martin Moré</button>
+      <button data-name="Camille Fauveau">Camille Fauveau</button>
+    </div>
+    <div class="pwd hidden" id="gate-pwd">
+      <input type="password" id="gate-pwd-input" placeholder="Mot de passe" autocomplete="off">
+      <div class="err" id="gate-err">❌ Mot de passe incorrect, réessaie.</div>
+      <button class="btn primary" id="gate-ok" style="width:100%;justify-content:center">Entrer</button>
+    </div>
+    <a class="back" href="index.html">← Retour aux bugs</a>
+  </div>
+</div>
+
+<!-- ================= Application ================= -->
+<div id="app" class="hidden">
+  <div id="status-banner" class="status-banner hidden"></div>
+
+  <header class="top"><div class="inner">
+    <h1>Suivi Clients Web</h1>
+    <p>Gestion de projet &amp; finances — priorités, deadlines, statuts et marge par mois</p>
+    <div class="who" id="who"></div>
+    <a class="btn" href="index.html">← Bugs</a>
+    <button class="btn" id="btnSwitch">🔄 Changer</button>
+    <button class="btn primary" id="btnNew">
+      <svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      Nouveau client</button>
+  </div></header>
+
+  <div class="wrap">
+    <div class="kpis" id="kpis"></div>
+
+    <div class="controls">
+      <div class="search">
+        <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+        <input id="search" placeholder="Rechercher un client, un domaine…">
+      </div>
+      <label class="msel">
+        <svg class="ic" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></svg>
+        <select id="monthSel"><option value="all">Tous les mois</option></select>
+      </label>
+      <div class="seg" id="seg">
+        <button data-f="all" class="active">Tous</button>
+        <button data-f="a_faire">À faire</button>
+        <button data-f="en_cours">En cours</button>
+        <button data-f="attente_client">Attente client</button>
+        <button data-f="termine_modifs">Terminé · modifs</button>
+        <button data-f="termine">Terminé</button>
+      </div>
+    </div>
+
+    <div id="boardSec"></div>
+    <div id="months"></div>
+
+    <footer>
+      Données partagées en temps réel entre Martin et Camille.
+      Clic sur une ligne pour ouvrir la fiche complète.<br>
+      Aucun mot de passe WordPress n'est stocké dans l'application.
+    </footer>
+  </div>
+</div>
+
+<!-- Fiche projet -->
+<div class="ov" id="ov">
+  <div class="modal">
+    <h2 id="mTitle">Fiche client</h2>
+    <p class="hint">Modifie les champs puis Enregistrer. Tout est synchronisé automatiquement.</p>
+    <div class="fgrid">
+      <div class="fld"><label>Client</label><input id="f_client"></div>
+      <div class="fld"><label>Domaine (sans https)</label><input id="f_domaine" placeholder="exemple.fr"></div>
+      <div class="fld"><label>Type de prestation</label><input id="f_type" placeholder="Création / Reprise / SEO…"></div>
+      <div class="fld"><label>Priorité (vide = aucune)</label>
+        <select id="f_priorite"><option value="">—</option><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+      <div class="fld"><label>Statut</label>
+        <select id="f_statut">
+          <option value="a_faire">À faire</option><option value="en_cours">En cours</option>
+          <option value="attente_client">Attente client</option>
+          <option value="termine_modifs">Terminé · modifs</option><option value="termine">Terminé</option>
+        </select></div>
+      <div class="fld"><label>Mois de rattachement</label><input id="f_mois" type="month"></div>
+      <div class="fld"><label>Formulaire reçu le</label><input id="f_dform" type="date"></div>
+      <div class="fld"><label>Début</label><input id="f_ddeb" type="date"></div>
+      <div class="fld"><label>Deadline / fin</label><input id="f_dfin" type="date"></div>
+      <div class="fld"><label>Contact client</label><input id="f_contact"></div>
+
+      <div class="sep">SEO</div>
+      <div class="fld"><label>SEO — statut</label>
+        <select id="f_seo">
+          <option value="a_faire">À faire</option><option value="en_cours">En cours</option>
+          <option value="fait">Fait</option><option value="non">Pas de SEO</option>
+        </select></div>
+      <div class="fld"><label>SEO — fait par</label>
+        <select id="f_seopar"><option value="">—</option><option value="moi">Moi</option><option value="martin">Martin</option></select></div>
+      <div class="fld"><label>Tarif Martin (€)</label><input id="f_martin_m" type="number" step="1"></div>
+      <div class="fld"><label>Paiement Martin</label>
+        <div class="chk"><input type="checkbox" id="f_martin_p"><span>Martin payé pour ce projet</span></div></div>
+
+      <div class="sep">Accès WordPress (jamais de mot de passe ici)</div>
+      <div class="fld"><label>URL wp-admin</label><input id="f_wpurl" placeholder="https://…/wp-admin"></div>
+      <div class="fld"><label>Login WordPress</label><input id="f_wplogin"></div>
+
+      <div class="sep">Finances</div>
+      <div class="fld"><label>Montant facturé (€)</label><input id="f_montant" type="number" step="1"></div>
+      <div class="fld"><label>Facturé à</label><input id="f_factura" placeholder="Maindustry…"></div>
+      <div class="fld"><label>Paiement</label>
+        <select id="f_paiement">
+          <option value="a_facturer">À facturer</option><option value="en_attente">En attente</option>
+          <option value="paye">Payé</option>
+        </select></div>
+      <div class="fld"><label>Autres coûts (un par ligne : libellé = montant)</label>
+        <textarea id="f_couts" rows="2" placeholder="Sous-traitance = 120"></textarea></div>
+
+      <div class="sep">Suivi</div>
+      <div class="fld full"><label>Prochaine action</label><textarea id="f_action" rows="3"></textarea></div>
+      <div class="fld full"><label>Notes (autant que tu veux)</label><textarea id="f_notes" rows="6"></textarea></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn danger" id="btnDel">Supprimer</button>
+      <span class="sp"></span>
+      <button class="btn" id="btnCancel">Annuler</button>
+      <button class="btn primary" id="btnSave">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Enregistré</div>
+
+<script src="js/firebase-config.js?v=1"></script>
+<script src="js/clients.js?v=1"></script>
+</body>
+</html>
