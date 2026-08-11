@@ -7,6 +7,34 @@
 
 ---
 
+## ⚙️ SETUP DE SESSION — TRANSCRIPTION DES VOCAUX (À FAIRE EN DÉBUT DE SESSION)
+
+Martin envoie souvent des **messages vocaux**. Le conteneur repart de zéro à chaque session,
+donc **réinstaller Whisper à chaque fois** (~40 s) :
+
+```bash
+pip install --quiet faster-whisper
+```
+
+Pour transcrire un vocal reçu :
+
+```bash
+python3 -c "
+from faster_whisper import WhisperModel
+m = WhisperModel('small', device='cpu', compute_type='int8')
+seg, _ = m.transcribe('LE_FICHIER.opus', language='fr', vad_filter=True)
+print(' '.join(s.text for s in seg))"
+```
+
+**Règles importantes :**
+- Lit directement les vocaux WhatsApp (`.opus` / `.ogg`) + `m4a`, `mp3`, `wav`, `mp4`. Pas besoin de ffmpeg (décodage via PyAV).
+- **TOUJOURS `vad_filter=True`** : sans lui, Whisper invente du texte sur les silences (ex. « Sous-titres réalisés par la communauté d'Amara.org »).
+- Audio difficile / jargon → relancer avec le modèle **`medium`** (plus lent, bien plus fidèle).
+- Whisper écorche les **noms propres et termes techniques** (GuestLucky, Beds24, noms de fonctionnalités…) : **relire, corriger, et signaler à Martin ce qui a été rétabli**.
+- Script tout prêt aussi dans le repo `CARROUSSEL-` : `pipeline/transcrire_vocal.py` — usage : `python3 transcrire_vocal.py vocal.ogg medium`.
+
+---
+
 ## 0. CONTEXTE GÉNÉRAL DU PROJET
 
 - **Repo** : `xSARRASx/BUG-GL` (site statique HTML/CSS/JS + Firebase Realtime DB).
@@ -388,6 +416,7 @@ print(f'Tirets longs: {clean.count(chr(0x2014))} (cible 0)')
 - ✅ Fiche client enrichie : champs Brief SEO (secteur, ville, mots-clés, ton, public) + Journal d'articles. Déployé.
 - ✅ Règle « même thème / texte régénéré » validée par Martin.
 - ✅ Livraison choisie = **copier-coller** (publication auto WordPress remise à plus tard).
+- ✅ Setup transcription vocaux (faster-whisper) documenté en tête de guide — à réinstaller chaque session.
 - ✅ Retour terrain Yoast intégré (capture Martin) : maillage interne = règle bloquante (jamais 0 lien) ; répartition uniforme du mot-clé sur tout l'article (check Premium). Cf. §1.6, §1.8, §8, §9.
 - ⬜ Premier article de démo : pas encore produit.
 - ⬜ Remplir les fiches élèves (mot-clé + ville + secteur minimum) pour activer le « go » autonome.
