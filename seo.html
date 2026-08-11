@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=20" />
+  <link rel="stylesheet" href="css/style.css?v=21" />
   <style>
     /* --- Bandeau Loi Hoguet --- */
     .hoguet-banner {
@@ -135,6 +135,42 @@
     }
     .cred-line .btn-copy:hover { border-color: var(--primary); background: rgba(108,92,231,0.12); }
 
+    /* --- Blocs de champs obligatoires --- */
+    .req-box {
+      border-radius: 12px; padding: 16px 18px; margin-bottom: 22px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .req-box.req-red    { background: rgba(255,92,122,0.07); border: 1px solid rgba(255,92,122,0.38); }
+    .req-box.req-orange { background: rgba(255,168,61,0.07); border: 1px solid rgba(255,168,61,0.38); }
+    .req-box-title { font-size: 14px; font-weight: 800; letter-spacing: -0.2px; }
+    .req-hint { font-weight: 500; color: var(--muted); font-size: 12.5px; }
+
+    .req-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap; margin-bottom: 6px;
+    }
+    .req-head label { margin-bottom: 0; }
+    .na-check {
+      display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+      font-size: 12px; font-weight: 600; color: var(--muted);
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 7px; padding: 4px 9px; white-space: nowrap;
+      user-select: none;
+    }
+    .na-check:hover { border-color: var(--primary); color: var(--text); }
+    .na-check input { width: 14px; height: 14px; margin: 0; cursor: pointer; accent-color: var(--primary); }
+    .na-check.checked {
+      border-color: var(--primary); background: rgba(108,92,231,0.18); color: #a99bff;
+    }
+    .req-field.is-na input, .req-field.is-na textarea, .req-field.is-na select {
+      opacity: 0.4; pointer-events: none; background: var(--bg-soft);
+    }
+    .req-field.missing input, .req-field.missing textarea, .req-field.missing select {
+      border-color: var(--danger);
+    }
+    .badge.badge-na { background: rgba(154,160,189,0.14); color: var(--muted); }
+    .badge.badge-warn { background: rgba(255,168,61,0.16); color: #ffa83d; }
+
     /* --- Glisser-déposer --- */
     .photos-input.dragover {
       outline: 2px dashed var(--primary); outline-offset: 4px; border-radius: 10px;
@@ -243,6 +279,7 @@
             <div class="seg" id="f-activite">
               <button type="button" data-val="conciergerie" class="active">🏨 Conciergerie</button>
               <button type="button" data-val="sous_location">🏠 Sous-location</button>
+              <button type="button" data-val="les_deux">🏨🏠 Les deux</button>
             </div>
           </div>
           <div class="field">
@@ -273,6 +310,79 @@
         <div class="field">
           <label for="f-email">✉️ E-mail du client</label>
           <input type="email" id="f-email" placeholder="client@exemple.com" />
+        </div>
+
+        <!-- ============ 🔴 INDISPENSABLES ============ -->
+        <div class="req-box req-red">
+          <div class="req-box-title">🔴 Indispensables <span class="req-hint">— sans ça, tout le SEO est à refaire</span></div>
+
+          <div class="field req-field">
+            <div class="req-head">
+              <label for="f-zone">📍 Zone exacte confirmée par le client *</label>
+              <label class="na-check"><input type="checkbox" id="na-zone" /> ⚠️ À confirmer</label>
+            </div>
+            <textarea id="f-zone" rows="3" placeholder="Ville principale + liste des communes réellement desservies&#10;Ex : Louviers (principale) — Vernon, Évreux, Rouen, Gaillon…"></textarea>
+            <small class="hint">C'est le piège n°1 (Valse de Lin, Les Clefs du Rivage). Si le client n'a pas encore confirmé, coche « ⚠️ À confirmer ».</small>
+          </div>
+
+          <div class="field req-field">
+            <div class="req-head">
+              <label for="f-prestation">🛠️ Prestation commandée *</label>
+              <label class="na-check"><input type="checkbox" id="na-prestation" /> Rien à remplir</label>
+            </div>
+            <select id="f-prestation">
+              <option value="">— Choisir —</option>
+              <option value="seo_complet">SEO complet (tout à faire)</option>
+              <option value="seo_local">SEO local uniquement (base déjà faite)</option>
+            </select>
+            <small class="hint">Léandro = local only · Le Nid Mousin = tout à faire (Yoast même pas installé). Ça change complètement le temps de travail.</small>
+          </div>
+        </div>
+
+        <!-- ============ 🟠 TRÈS UTILES ============ -->
+        <div class="req-box req-orange">
+          <div class="req-box-title">🟠 Très utiles <span class="req-hint">— pour le schema, la fiche Google et le NAP</span></div>
+
+          <div class="field req-field">
+            <div class="req-head">
+              <label for="f-phone">📞 Téléphone du client *</label>
+              <label class="na-check"><input type="checkbox" id="na-phone" /> Rien à remplir</label>
+            </div>
+            <input type="text" id="f-phone" placeholder="Ex : 06 12 34 56 78" />
+          </div>
+
+          <div class="field req-field">
+            <div class="req-head">
+              <label for="f-adresse">🏠 Adresse (même de simple rattachement) *</label>
+              <label class="na-check"><input type="checkbox" id="na-adresse" /> Rien à remplir</label>
+            </div>
+            <input type="text" id="f-adresse" placeholder="Ex : 12 rue des Lilas, 27400 Louviers" />
+          </div>
+
+          <div class="field req-field">
+            <div class="req-head">
+              <label for="f-facebook">📘 Page Facebook (URL réelle) *</label>
+              <label class="na-check"><input type="checkbox" id="na-facebook" /> Rien à remplir</label>
+            </div>
+            <input type="text" id="f-facebook" placeholder="https://www.facebook.com/…" />
+          </div>
+
+          <div class="field req-field">
+            <div class="req-head">
+              <label for="f-instagram">📷 Compte Instagram (URL réelle) *</label>
+              <label class="na-check"><input type="checkbox" id="na-instagram" /> Rien à remplir</label>
+            </div>
+            <input type="text" id="f-instagram" placeholder="https://www.instagram.com/…" />
+          </div>
+
+          <div class="field req-field">
+            <div class="req-head">
+              <label for="f-google">🔵 Compte Google (Gmail) du client *</label>
+              <label class="na-check"><input type="checkbox" id="na-google" /> Rien à remplir</label>
+            </div>
+            <input type="email" id="f-google" placeholder="client@gmail.com" />
+            <small class="hint">Pour Site Kit / la propriété Google. ⚠️ Vérifier que c'est bien un <b>Gmail</b> — Léandro était en Outlook, transfert impossible.</small>
+          </div>
         </div>
 
         <div class="client-box">
@@ -374,7 +484,7 @@
     </div>
   </div>
 
-  <script src="js/firebase-config.js?v=20"></script>
-  <script src="js/seo.js?v=20"></script>
+  <script src="js/firebase-config.js?v=21"></script>
+  <script src="js/seo.js?v=21"></script>
 </body>
 </html>

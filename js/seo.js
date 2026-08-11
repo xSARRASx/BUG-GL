@@ -20,7 +20,8 @@
 
   // --- Labels ---
   const STATUT_LABEL = { afaire: "🔴 À faire", encours: "🟠 En cours", termine: "🟢 Terminé" };
-  const ACTIVITE_LABEL = { conciergerie: "🏨 Conciergerie", sous_location: "🏠 Sous-location" };
+  const ACTIVITE_LABEL = { conciergerie: "🏨 Conciergerie", sous_location: "🏠 Sous-location", les_deux: "🏨🏠 Conciergerie + Sous-location" };
+  const PRESTATION_LABEL = { seo_complet: "SEO complet (tout à faire)", seo_local: "SEO local uniquement (base déjà faite)" };
   // Mapping statut → classe CSS pill existante
   const PILL_CLASS = { afaire: "nontraite", encours: "encours", termine: "traite" };
 
@@ -264,6 +265,33 @@
   // -------------------------------------------------------
   //  Fenêtre de lecture (Voir)
   // -------------------------------------------------------
+  // Affiche un champ obligatoire dans la fiche (ou son état « rien à remplir »)
+  function detailReq(s, key, label, opt) {
+    opt = opt || {};
+    const val = s[key];
+    const na = s[key + "Na"];
+    if (!val && !na) return "";
+    let body;
+    if (!val) {
+      const txt = opt.naLabel || "Rien à remplir";
+      body = `<span class="badge ${opt.naWarn ? "badge-warn" : "badge-na"}">${escapeHtml(txt)}</span>`;
+    } else if (opt.map) {
+      body = escapeHtml(opt.map[val] || val);
+    } else if (opt.link) {
+      const href = /^https?:\/\//i.test(val) ? val : "https://" + val;
+      body = `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" style="color:#a99bff">${escapeHtml(val)}</a>`;
+    } else if (opt.tel) {
+      body = `<a href="tel:${escapeHtml(val.replace(/\s/g, ""))}" style="color:#a99bff">${escapeHtml(val)}</a>`;
+    } else if (opt.gmailCheck) {
+      const ok = /@gmail\.com$/i.test(val);
+      body = `<a href="mailto:${escapeHtml(val)}" style="color:#a99bff">${escapeHtml(val)}</a>`
+        + (ok ? "" : ` <span class="badge badge-warn">⚠️ pas un Gmail</span>`);
+    } else {
+      body = escapeHtml(val);
+    }
+    return `<h4 class="detail-label">${label}</h4><div class="detail-desc">${body}</div>`;
+  }
+
   function openDetail(id) {
     const s = sites[id];
     if (!s) return;
@@ -283,6 +311,13 @@
       ${s.url ? `<h4 class="detail-label">🌐 URL</h4><div class="detail-url detail-desc"><a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.url)}</a></div>` : ""}
       ${s.ville ? `<h4 class="detail-label">📍 Ville</h4><div class="detail-desc">${escapeHtml(s.ville)}</div>` : ""}
       ${s.email ? `<h4 class="detail-label">✉️ E-mail</h4><div class="detail-desc"><a href="mailto:${escapeHtml(s.email)}" style="color:#a99bff">${escapeHtml(s.email)}</a></div>` : ""}
+      ${detailReq(s, "zone", "📍 Zone exacte confirmée", { naLabel: "⚠️ À confirmer avec le client", naWarn: true })}
+      ${detailReq(s, "prestation", "🛠️ Prestation commandée", { map: PRESTATION_LABEL })}
+      ${detailReq(s, "phone", "📞 Téléphone", { tel: true })}
+      ${detailReq(s, "adresse", "🏠 Adresse")}
+      ${detailReq(s, "facebook", "📘 Facebook", { link: true })}
+      ${detailReq(s, "instagram", "📷 Instagram", { link: true })}
+      ${detailReq(s, "google", "🔵 Compte Google", { gmailCheck: true })}
       ${(s.adminUrl || s.login || s.pass) ? `
         <h4 class="detail-label">🔑 Accès au site</h4>
         <div class="creds-box">
@@ -337,6 +372,33 @@
     $$(`#${gid} button`).forEach((b) => b.classList.toggle("active", b.dataset.val === val));
   }
 
+  // --- Champs obligatoires avec case « Rien à remplir » ---
+  //  key : nom du champ · id : id de l'input · label : message d'alerte
+  const REQ_FIELDS = [
+    { key: "zone",      id: "f-zone",      label: "📍 La zone exacte (ville principale + communes)" },
+    { key: "prestation", id: "f-prestation", label: "🛠️ La prestation commandée" },
+    { key: "phone",     id: "f-phone",     label: "📞 Le téléphone du client" },
+    { key: "adresse",   id: "f-adresse",   label: "🏠 L'adresse du client" },
+    { key: "facebook",  id: "f-facebook",  label: "📘 La page Facebook" },
+    { key: "instagram", id: "f-instagram", label: "📷 Le compte Instagram" },
+    { key: "google",    id: "f-google",    label: "🔵 Le compte Google (Gmail) du client" },
+  ];
+
+  // Grise / dégrise le champ quand on coche « Rien à remplir »
+  function syncNa(f) {
+    const box = $("#na-" + f.key);
+    const wrap = $("#" + f.id).closest(".req-field");
+    wrap.classList.toggle("is-na", box.checked);
+    box.closest(".na-check").classList.toggle("checked", box.checked);
+    if (box.checked) wrap.classList.remove("missing");
+  }
+
+  function wireNaChecks() {
+    REQ_FIELDS.forEach((f) => {
+      $("#na-" + f.key).addEventListener("change", () => syncNa(f));
+    });
+  }
+
   function openModal(site) {
     const isEdit = Boolean(site);
     $("#modal-title").textContent = isEdit ? "Modifier le site" : "Nouveau site";
@@ -354,6 +416,13 @@
     $("#f-gmb").value   = isEdit ? (site.gmb    || "") : "";
     $("#f-drive").value = isEdit ? (site.drive  || "") : "";
     $("#f-note").value  = isEdit ? (site.note   || "") : "";
+    // Champs obligatoires + leurs cases « Rien à remplir »
+    REQ_FIELDS.forEach((f) => {
+      $("#" + f.id).value = isEdit ? (site[f.key] || "") : "";
+      $("#na-" + f.key).checked = isEdit ? Boolean(site[f.key + "Na"]) : false;
+      $("#" + f.id).closest(".req-field").classList.remove("missing");
+      syncNa(f);
+    });
     editingFiles = isEdit && site.files ? Object.values(site.files) : [];
     renderFilesPreview();
     $("#btn-delete").classList.toggle("hidden", !isEdit);
@@ -417,11 +486,43 @@
       updatedAt: Date.now(),
       updatedBy: me,
     };
+    // Champs obligatoires : soit remplis, soit cochés « Rien à remplir »
+    REQ_FIELDS.forEach((f) => {
+      data[f.key] = $("#" + f.id).value.trim();
+      data[f.key + "Na"] = $("#na-" + f.key).checked;
+    });
+
     if (!data.nom) return;
     if (!data.ville) {
       alert("📍 La ville est obligatoire. Merci de la renseigner.");
       $("#f-ville").focus();
       return;
+    }
+
+    const manquants = REQ_FIELDS.filter((f) => !data[f.key] && !data[f.key + "Na"]);
+    REQ_FIELDS.forEach((f) => {
+      $("#" + f.id).closest(".req-field").classList.toggle("missing", manquants.includes(f));
+    });
+    if (manquants.length) {
+      alert(
+        "Il manque " + manquants.length + " information" + (manquants.length > 1 ? "s" : "") + " :\n\n"
+        + manquants.map((f) => "• " + f.label).join("\n")
+        + "\n\nSi tu n'as vraiment rien à mettre, coche la case « Rien à remplir » à côté du champ."
+      );
+      const first = manquants[0];
+      $("#" + first.id).focus();
+      $("#" + first.id).scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+
+    // Avertissement (non bloquant) si le compte Google n'est pas un Gmail
+    if (data.google && !/@gmail\.com$/i.test(data.google)) {
+      const go = confirm(
+        "⚠️ « " + data.google + " » n'est pas une adresse Gmail.\n\n"
+        + "Le transfert de propriété Google sera impossible (comme chez Léandro avec Outlook).\n\n"
+        + "Enregistrer quand même ?"
+      );
+      if (!go) { $("#f-google").focus(); return; }
     }
 
     if (id) {
@@ -500,6 +601,7 @@
     $("#btn-cancel").addEventListener("click", closeModal);
     $("#btn-delete").addEventListener("click", deleteSite);
     $("#form").addEventListener("submit", submitForm);
+    wireNaChecks();
     $("#f-files").addEventListener("change", handleFileUpload);
     $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
 
