@@ -148,7 +148,7 @@
       const idx = termineIndex(s);
       if (idx >= lo && idx <= hi) count++;
     });
-    $("#rev-total").textContent = (count * 40) + " €";
+    $("#rev-total").textContent = (count * 50) + " €";
     $("#rev-count").textContent = count;
   }
 
