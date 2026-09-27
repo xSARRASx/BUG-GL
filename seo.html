@@ -106,15 +106,26 @@
     .access-screen h2 { font-size: 22px; font-weight: 700; }
     .access-screen p { color: var(--muted); font-size: 15px; max-width: 360px; line-height: 1.6; }
 
-    /* --- Mot de passe dans le who-modal --- */
-    .pwd-box { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
-    .pwd-box input[type="password"] {
+    /* --- Écran de connexion Firebase --- */
+    #login-form .field { margin-bottom: 14px; }
+    #login-form label {
+      display: block; font-size: 12px; color: var(--muted);
+      font-weight: 600; margin-bottom: 6px;
+    }
+    #login-form input {
       width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--text);
       border-radius: 10px; padding: 11px 14px; font-size: 14px; font-family: inherit;
     }
-    .pwd-box input[type="password"]:focus { outline: none; border-color: var(--primary); }
-    .pwd-error { color: var(--danger); font-size: 13px; font-weight: 600; display: none; margin-top: 2px; }
-    .who-buttons button.selected { border-color: var(--primary); background: rgba(108,92,231,0.2); color: #a99bff; }
+    #login-form input:focus { outline: none; border-color: var(--primary); }
+    .login-error {
+      color: var(--danger); font-size: 13px; font-weight: 600;
+      display: none; margin-bottom: 12px; line-height: 1.5;
+    }
+    .login-error.show { display: block; }
+    .login-note {
+      font-size: 12px; color: var(--muted); text-align: center;
+      margin-top: 14px; line-height: 1.5;
+    }
 
     .nav-back { font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; }
     .nav-back:hover { color: var(--text); }
@@ -190,12 +201,13 @@
   <!-- Bandeau état Firebase -->
   <div id="status-banner" class="status-banner hidden"></div>
 
-  <!-- Écran accès refusé -->
+  <!-- Écran d'erreur (connexion Firebase impossible) -->
   <div id="access-denied" class="hidden">
     <div class="access-screen">
-      <div class="lock-icon">🔒</div>
-      <h2>Accès réservé</h2>
-      <p>Cette section est réservée à <strong>Martin</strong>, <strong>Camille</strong>, <strong>Sébastien</strong> et <strong>Pierre</strong>.</p>
+      <div class="lock-icon" id="access-icon">⚠️</div>
+      <h2 id="access-title">Connexion impossible</h2>
+      <p id="access-text">Le Suivi SEO n'a pas pu se connecter à la base de données. Les modifications sont désactivées pour éviter de créer des données non synchronisées.</p>
+      <button class="btn btn-primary" style="margin-top:8px" onclick="location.reload()">🔄 Réessayer</button>
       <a href="index.html" class="btn btn-ghost" style="margin-top:8px">← Retour aux bugs</a>
     </div>
   </div>
@@ -460,31 +472,33 @@
     </div>
   </div>
 
-  <!-- Modale identité + mot de passe -->
-  <div id="who-modal" class="modal-overlay hidden">
+  <!-- Écran de connexion (Firebase Authentication) -->
+  <div id="login-screen" class="modal-overlay hidden">
     <div class="modal modal-small">
-      <div class="modal-head"><h2>Qui es-tu ?</h2></div>
+      <div class="modal-head"><h2>🔒 Connexion</h2></div>
       <div class="modal-body">
-        <p class="who-intro">Section réservée à Martin et Camille. Choisis ton nom puis entre ton mot de passe.</p>
-        <div class="who-buttons" id="who-buttons">
-          <button data-name="Martin Moré">Martin Moré</button>
-          <button data-name="Camille Fauveau">Camille Fauveau</button>
-          <button data-name="Sébastien Moré">Sébastien Moré</button>
-          <button data-name="Pierre Moré">Pierre Moré</button>
-        </div>
-        <div class="pwd-box hidden" id="pwd-box">
-          <input type="password" id="pwd-input" placeholder="Mot de passe" autocomplete="off" />
-          <span class="pwd-error" id="pwd-error">❌ Mot de passe incorrect, réessaie.</span>
-          <button type="button" id="pwd-ok" class="btn btn-primary">Entrer</button>
-        </div>
-        <div style="margin-top:20px; text-align:center">
+        <p class="who-intro">Section réservée. Connecte-toi avec ton adresse e-mail et ton mot de passe.</p>
+        <form id="login-form" autocomplete="on">
+          <div class="field">
+            <label for="login-email">Adresse e-mail</label>
+            <input type="email" id="login-email" placeholder="prenom@exemple.com" autocomplete="username" required />
+          </div>
+          <div class="field">
+            <label for="login-password">Mot de passe</label>
+            <input type="password" id="login-password" placeholder="Mot de passe" autocomplete="current-password" required />
+          </div>
+          <div class="login-error" id="login-error"></div>
+          <button type="submit" id="login-submit" class="btn btn-primary" style="width:100%;justify-content:center">Se connecter</button>
+        </form>
+        <p class="login-note">Les comptes sont créés uniquement par l'administrateur. Aucune inscription depuis le site.</p>
+        <div style="margin-top:16px; text-align:center">
           <a href="index.html" style="font-size:13px; color:var(--muted); text-decoration:none">← Retour aux bugs</a>
         </div>
       </div>
     </div>
   </div>
 
-  <script src="js/firebase-config.js?v=22"></script>
-  <script src="js/seo.js?v=22"></script>
+  <script src="js/firebase-config.js?v=23"></script>
+  <script src="js/seo.js?v=23"></script>
 </body>
 </html>

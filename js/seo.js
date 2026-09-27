@@ -14,9 +14,11 @@
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  // --- Accès & mots de passe ---
-  const SEO_EDITORS = ["Martin Moré", "Camille Fauveau", "Sébastien Moré", "Pierre Moré"];
-  const SEO_PASSWORDS = { "Martin Moré": "martin@", "Camille Fauveau": "camille@", "Sébastien Moré": "sebastien@", "Pierre Moré": "pierre@" };
+  // --- Accès ---
+  //  L'accès est géré par Firebase Authentication (e-mail / mot de passe).
+  //  Les comptes sont créés UNIQUEMENT depuis la console Firebase :
+  //  aucune inscription n'est possible depuis le site.
+  //  Aucun mot de passe n'est stocké ici ni dans localStorage.
 
   // --- Labels ---
   const STATUT_LABEL = { afaire: "🔴 À faire", encours: "🟠 En cours", termine: "🟢 Terminé" };
@@ -25,8 +27,9 @@
   // Mapping statut → classe CSS pill existante
   const PILL_CLASS = { afaire: "nontraite", encours: "encours", termine: "traite" };
 
-  // --- Identité ---
-  let me = localStorage.getItem("seo_user") || "";
+  // --- Identité (remplie par Firebase Auth, jamais par localStorage) ---
+  let me = "";
+  let currentUser = null;
 
   // --- Conversion fichier → base64 ---
   function fileToBase64(file) {
@@ -39,19 +42,11 @@
   }
 
   // -------------------------------------------------------
-  //  Stores
+  //  Store
+  //  ⚠️ Volontairement PAS de LocalStore de secours pour le SEO :
+  //     en cas d'échec Firebase, on bloque les modifications plutôt
+  //     que de créer des données locales jamais synchronisées.
   // -------------------------------------------------------
-  class LocalStore {
-    constructor() { this.key = "seo_data"; this.listeners = []; }
-    _read() { try { return JSON.parse(localStorage.getItem(this.key)) || {}; } catch { return {}; } }
-    _write(d) { localStorage.setItem(this.key, JSON.stringify(d)); this._emit(); }
-    _emit() { this.listeners.forEach((cb) => cb(this._read())); }
-    subscribe(cb) { this.listeners.push(cb); cb(this._read()); }
-    add(item) { const d = this._read(); const id = uid(); d[id] = { ...item, id }; this._write(d); }
-    update(id, patch) { const d = this._read(); if (d[id]) { d[id] = { ...d[id], ...patch }; this._write(d); } }
-    remove(id) { const d = this._read(); delete d[id]; this._write(d); }
-  }
-
   class FirebaseStore {
     constructor(db, fns) { this.db = db; this.fns = fns; }
     subscribe(cb) {
@@ -74,39 +69,64 @@
   }
 
   // -------------------------------------------------------
-  //  Initialisation du store
+  //  Initialisation Firebase (base + authentification)
   // -------------------------------------------------------
-  let store;
+  let store = null;
+  let auth = null;
+  let authFns = null;
   const banner = $("#status-banner");
 
-  async function initStore() {
-    if (window.firebaseActive) {
-      try {
-        const appMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-        const dbMod  = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js");
-        const apps = appMod.getApps ? appMod.getApps() : [];
-        const app = apps.length ? apps[0] : appMod.initializeApp(window.firebaseConfig);
-        const db = dbMod.getDatabase(app);
-        const fns = {
-          ref: dbMod.ref, onValue: dbMod.onValue, push: dbMod.push,
-          set: dbMod.set, update: dbMod.update, remove: dbMod.remove,
-        };
-        store = new FirebaseStore(db, fns);
-        banner.className = "status-banner live";
-        banner.textContent = "🟢 Connecté en temps réel — Camille et Martin voient les mêmes données.";
-        banner.classList.remove("hidden");
-        return;
-      } catch (e) {
-        console.error(e);
-        banner.className = "status-banner error";
-        banner.textContent = "⚠️ Connexion Firebase impossible. Les données restent sur cet appareil.";
-        banner.classList.remove("hidden");
-      }
-    }
-    store = new LocalStore();
-    banner.className = "status-banner local";
-    banner.textContent = "💡 Mode local : données non partagées (Firebase non configuré).";
+  // Affiche l'écran d'erreur bloquant (aucune modification possible)
+  function showFatal(title, text) {
+    $("#seo-app").classList.add("hidden");
+    $("#login-screen").classList.add("hidden");
+    $("#access-title").textContent = title;
+    $("#access-text").textContent = text;
+    $("#access-denied").classList.remove("hidden");
+    banner.className = "status-banner error";
+    banner.textContent = "⛔ " + title + " — modifications désactivées.";
     banner.classList.remove("hidden");
+  }
+
+  // Initialise l'app Firebase, la base et l'authentification.
+  // Retourne true si tout est prêt, false sinon (aucun repli local).
+  async function initFirebase() {
+    if (!window.firebaseActive) {
+      showFatal(
+        "Firebase non configuré",
+        "La configuration Firebase est absente. Le Suivi SEO ne peut pas fonctionner sans connexion à la base partagée."
+      );
+      return false;
+    }
+    try {
+      const appMod  = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+      const dbMod   = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js");
+      const authMod = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+
+      const apps = appMod.getApps ? appMod.getApps() : [];
+      const app = apps.length ? apps[0] : appMod.initializeApp(window.firebaseConfig);
+
+      const db = dbMod.getDatabase(app);
+      store = new FirebaseStore(db, {
+        ref: dbMod.ref, onValue: dbMod.onValue, push: dbMod.push,
+        set: dbMod.set, update: dbMod.update, remove: dbMod.remove,
+      });
+
+      auth = authMod.getAuth(app);
+      authFns = {
+        signInWithEmailAndPassword: authMod.signInWithEmailAndPassword,
+        onAuthStateChanged: authMod.onAuthStateChanged,
+        signOut: authMod.signOut,
+      };
+      return true;
+    } catch (e) {
+      console.error(e);
+      showFatal(
+        "Connexion impossible",
+        "Le Suivi SEO n'a pas pu joindre Firebase. Les modifications sont désactivées pour éviter de créer des données non synchronisées. Vérifie ta connexion internet puis réessaie."
+      );
+      return false;
+    }
   }
 
   // -------------------------------------------------------
@@ -547,38 +567,105 @@
   }
 
   // -------------------------------------------------------
-  //  Identité + mot de passe
+  //  Authentification (Firebase Auth — e-mail / mot de passe)
   // -------------------------------------------------------
-  let pendingName = null;
 
-  function askIdentity() {
-    pendingName = null;
-    $("#pwd-box").classList.add("hidden");
-    $("#pwd-input").value = "";
-    $("#pwd-error").style.display = "none";
-    $$(".who-buttons button").forEach((b) => b.classList.remove("selected"));
-    $("#who-modal").classList.remove("hidden");
-  }
-
-  function setIdentity(name) {
-    me = name;
-    localStorage.setItem("seo_user", name);
-    $("#me").innerHTML = `Connecté en tant que <b>${escapeHtml(name)}</b>`;
-    $("#who-modal").classList.add("hidden");
-    $("#seo-app").classList.remove("hidden");
+  // Affiche l'écran de connexion
+  function showLogin() {
+    $("#seo-app").classList.add("hidden");
     $("#access-denied").classList.add("hidden");
+    $("#login-screen").classList.remove("hidden");
+    $("#login-password").value = "";
+    hideLoginError();
+    setTimeout(() => {
+      const email = $("#login-email");
+      (email.value ? $("#login-password") : email).focus();
+    }, 50);
   }
 
-  function tryPassword() {
-    if (!pendingName) return;
-    const val = $("#pwd-input").value;
-    if (val === SEO_PASSWORDS[pendingName]) {
-      $("#pwd-error").style.display = "none";
-      setIdentity(pendingName);
-    } else {
-      $("#pwd-error").style.display = "block";
-      $("#pwd-input").value = "";
-      $("#pwd-input").focus();
+  // Affiche l'application, une fois connecté
+  function showApp(user) {
+    currentUser = user;
+    me = user.displayName || user.email;
+    $("#me").innerHTML = `Connecté en tant que <b>${escapeHtml(me)}</b>`;
+    $("#login-screen").classList.add("hidden");
+    $("#access-denied").classList.add("hidden");
+    $("#seo-app").classList.remove("hidden");
+    banner.className = "status-banner live";
+    banner.textContent = "🟢 Connecté en temps réel — Camille et Martin voient les mêmes données.";
+    banner.classList.remove("hidden");
+  }
+
+  function showLoginError(msg) {
+    const el = $("#login-error");
+    el.textContent = msg;
+    el.classList.add("show");
+  }
+  function hideLoginError() {
+    $("#login-error").classList.remove("show");
+  }
+
+  // Traduit les codes d'erreur Firebase en messages lisibles
+  function authErrorMessage(code) {
+    switch (code) {
+      case "auth/invalid-email":
+        return "❌ Cette adresse e-mail n'est pas valide.";
+      case "auth/user-disabled":
+        return "❌ Ce compte a été désactivé. Contacte l'administrateur.";
+      case "auth/user-not-found":
+      case "auth/wrong-password":
+      case "auth/invalid-credential":
+        return "❌ E-mail ou mot de passe incorrect.";
+      case "auth/too-many-requests":
+        return "❌ Trop de tentatives. Patiente quelques minutes avant de réessayer.";
+      case "auth/network-request-failed":
+        return "❌ Pas de connexion internet. Vérifie ton réseau puis réessaie.";
+      case "auth/operation-not-allowed":
+        return "❌ La connexion par e-mail n'est pas activée côté Firebase.";
+      default:
+        return "❌ Connexion impossible. Réessaie ou contacte l'administrateur.";
+    }
+  }
+
+  async function doLogin(ev) {
+    if (ev) ev.preventDefault();
+    if (!auth || !authFns) return;
+
+    const email = $("#login-email").value.trim();
+    const password = $("#login-password").value;
+    if (!email || !password) {
+      showLoginError("❌ Remplis l'adresse e-mail et le mot de passe.");
+      return;
+    }
+
+    const btn = $("#login-submit");
+    btn.disabled = true;
+    btn.textContent = "Connexion…";
+    hideLoginError();
+
+    try {
+      await authFns.signInWithEmailAndPassword(auth, email, password);
+      // La suite est gérée par onAuthStateChanged.
+      $("#login-password").value = "";
+    } catch (e) {
+      console.error(e);
+      showLoginError(authErrorMessage(e && e.code));
+      $("#login-password").value = "";
+      $("#login-password").focus();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Se connecter";
+    }
+  }
+
+  async function doLogout() {
+    if (!auth || !authFns) return;
+    try {
+      await authFns.signOut(auth);
+      // onAuthStateChanged réaffichera l'écran de connexion.
+    } catch (e) {
+      console.error(e);
+      alert("Déconnexion impossible. Réessaie.");
     }
   }
 
@@ -588,13 +675,7 @@
   function wireEvents() {
     // Header
     $("#btn-add").addEventListener("click", () => openModal(null));
-    $("#btn-switch").addEventListener("click", () => {
-      me = "";
-      localStorage.removeItem("seo_user");
-      $("#seo-app").classList.add("hidden");
-      $("#access-denied").classList.add("hidden");
-      askIdentity();
-    });
+    $("#btn-switch").addEventListener("click", doLogout);
 
     // Formulaire
     $("#modal-close").addEventListener("click", closeModal);
@@ -683,28 +764,22 @@
     }));
     $("#search").addEventListener("input", (e) => { searchText = e.target.value; render(); });
 
-    // Who-modal : clic sur nom → affiche champ mot de passe
-    $$("#who-buttons button").forEach((b) => {
-      b.addEventListener("click", () => {
-        pendingName = b.dataset.name;
-        $$(".who-buttons button").forEach((x) => x.classList.remove("selected"));
-        b.classList.add("selected");
-        $("#pwd-input").value = "";
-        $("#pwd-error").style.display = "none";
-        $("#pwd-box").classList.remove("hidden");
-        setTimeout(() => $("#pwd-input").focus(), 50);
-      });
-    });
-
-    $("#pwd-ok").addEventListener("click", tryPassword);
-    $("#pwd-input").addEventListener("keydown", (e) => { if (e.key === "Enter") tryPassword(); });
+    // Formulaire de connexion
+    $("#login-form").addEventListener("submit", doLogin);
+    ["#login-email", "#login-password"].forEach((sel) =>
+      $(sel).addEventListener("input", hideLoginError));
   }
 
   // -------------------------------------------------------
   //  Démarrage
   // -------------------------------------------------------
   async function start() {
-    await initStore();
+    // Nettoyage : ancienne identité stockée par la version pré-Firebase Auth.
+    try { localStorage.removeItem("seo_user"); localStorage.removeItem("seo_data"); } catch (e) { /* ignoré */ }
+
+    const ok = await initFirebase();
+    if (!ok) return; // écran d'erreur déjà affiché, rien n'est branché
+
     wireEvents();
 
     // Sélecteur de revenus : ce mois-ci par défaut
@@ -712,18 +787,27 @@
     $("#rev-from").value = indexToYm(revFrom);
     $("#rev-to").value = indexToYm(revTo);
 
-    store.subscribe((data) => { sites = data || {}; render(); });
+    let subscribed = false;
 
-    if (me && SEO_EDITORS.includes(me)) {
-      // Déjà connecté (localStorage) → affiche directement
-      $("#me").innerHTML = `Connecté en tant que <b>${escapeHtml(me)}</b>`;
-      $("#seo-app").classList.remove("hidden");
-      $("#access-denied").classList.add("hidden");
-    } else {
-      me = "";
-      localStorage.removeItem("seo_user");
-      askIdentity();
-    }
+    // Firebase restaure tout seul la session au rechargement de la page.
+    authFns.onAuthStateChanged(auth, (user) => {
+      if (user) {
+        showApp(user);
+        if (!subscribed) {
+          subscribed = true;
+          store.subscribe((data) => { sites = data || {}; render(); });
+        } else {
+          render();
+        }
+      } else {
+        currentUser = null;
+        me = "";
+        sites = {};
+        $("#me").textContent = "";
+        banner.classList.add("hidden");
+        showLogin();
+      }
+    });
   }
 
   if (document.readyState === "loading") {
