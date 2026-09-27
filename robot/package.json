@@ -1,0 +1,17 @@
+{
+  "name": "seo-robot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Robot SEO Guest Lucky — V1 dry-run. Detecte les fiches /seo au statut 'afaire' et verifie leurs champs obligatoires.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "verifier": "node --check index.js && node scripts/selftest.js"
+  },
+  "dependencies": {
+    "firebase": "10.12.2"
+  }
+}

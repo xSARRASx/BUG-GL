@@ -1,0 +1,94 @@
+name: Robot SEO (dry-run)
+
+# =============================================================
+#  V1 — DRY-RUN STRICT
+#  Ce workflow ne modifie AUCUNE donnée Firebase : robot/config.json
+#  est en "dryRun": true, et toute tentative d'écriture est bloquée
+#  par robot/lib/guard.js avant d'atteindre le SDK.
+#
+#  Secrets requis (Settings → Secrets and variables → Actions) :
+#    SEO_ROBOT_EMAIL
+#    SEO_ROBOT_PASSWORD
+#
+#  ⚠️ Le dépôt est PUBLIC : les logs de ce workflow sont publics.
+#     Le robot n'affiche donc que des résumés anonymisés.
+# =============================================================
+
+on:
+  # Déclenchement manuel depuis l'onglet Actions
+  workflow_dispatch:
+
+  # Passage automatique toutes les 6 heures.
+  # Volontairement peu fréquent tant qu'on est en dry-run.
+  # Le cron GitHub est « best effort » : un retard de 5 à 20 min est normal.
+  schedule:
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: read
+
+# Un seul passage à la fois, pour éviter que deux exécutions
+# se marchent dessus le jour où le mode actif sera allumé.
+concurrency:
+  group: seo-robot
+  cancel-in-progress: false
+
+jobs:
+  robot:
+    name: Détection et vérification
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: robot/package-lock.json
+
+      - name: Vérifier la présence des secrets
+        env:
+          SEO_ROBOT_EMAIL: ${{ secrets.SEO_ROBOT_EMAIL }}
+          SEO_ROBOT_PASSWORD: ${{ secrets.SEO_ROBOT_PASSWORD }}
+        run: |
+          manquants=""
+          if [ -z "$SEO_ROBOT_EMAIL" ]; then
+            manquants="$manquants SEO_ROBOT_EMAIL"
+          fi
+          if [ -z "$SEO_ROBOT_PASSWORD" ]; then
+            manquants="$manquants SEO_ROBOT_PASSWORD"
+          fi
+          if [ -n "$manquants" ]; then
+            echo "::error::Secret(s) GitHub manquant(s) :$manquants"
+            echo "À créer dans Settings → Secrets and variables → Actions."
+            echo "Le robot n'a rien exécuté et rien modifié."
+            exit 1
+          fi
+          echo "Secrets présents (valeurs jamais affichées)."
+
+      - name: Installer les dépendances
+        working-directory: robot
+        run: npm ci --no-audit --no-fund
+
+      - name: Contrôle de sécurité (auto-test hors ligne)
+        working-directory: robot
+        run: node scripts/selftest.js
+
+      - name: Vérifier que le dry-run est bien actif
+        run: |
+          if ! grep -q '"dryRun": true' robot/config.json; then
+            echo "::error::robot/config.json n'est plus en dryRun:true — exécution refusée par sécurité."
+            exit 1
+          fi
+          echo "dryRun confirmé : aucune écriture ne sera possible."
+
+      - name: Lancer le robot
+        working-directory: robot
+        env:
+          SEO_ROBOT_EMAIL: ${{ secrets.SEO_ROBOT_EMAIL }}
+          SEO_ROBOT_PASSWORD: ${{ secrets.SEO_ROBOT_PASSWORD }}
+        run: node index.js
