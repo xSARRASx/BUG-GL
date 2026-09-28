@@ -1,15 +1,26 @@
 // =============================================================
 //  Faux magasin Firebase, pour tester le flux hors ligne
 // =============================================================
-//  Simule une fiche /seo et son entrée /seoRobot, et permet de faire
-//  échouer n'importe quelle opération à la demande, afin de vérifier
-//  que la fiche ne reste jamais bloquée en « encours ».
+//  Simule une fiche /seo et son entrée /seoRobot.
+//
+//  Deux façons de faire échouer une opération, car les primitives
+//  réelles échouent de deux manières différentes :
+//    • echecs[nom]      → l'opération LÈVE une exception
+//    • retoursFalse[nom] → l'opération renvoie false (transaction
+//                          non commitée), ce qui n'est PAS un succès
+//
+//  libererSurement n'est pas simulé : il délègue au VRAI
+//  libererAvecRepli de lib/flow.js, pour que les tests couvrent le
+//  code réellement exécuté en production.
 // =============================================================
+
+import { libererAvecRepli } from "../lib/flow.js";
 
 export function creerFauxOps(options = {}) {
   const {
     statutInitial = "afaire",
-    echecs = {},          // ex. { ecrireMetaReservation: true, remettreAFaire: true }
+    echecs = {},        // ex. { ecrireMetaReservation: true }
+    retoursFalse = {},  // ex. { liberer: true, remettreAFaireRepli: true }
     analyse = { disponible: false, motif: "Analyse non branchée (stub)" },
   } = options;
 
@@ -20,50 +31,72 @@ export function creerFauxOps(options = {}) {
     note: "Note existante de Camille.",
     rapportsEcrits: 0,
     appels: [],
+    // « reservation » tant que la fiche n'est pas libérée, puis « liberation ».
+    // Permet de distinguer le rollback de réservation du repli de libération,
+    // qui appellent tous deux remettreAFaire.
+    phase: "reservation",
   };
 
-  const peutEchouer = (nom) => {
+  const peutLever = (nom) => {
     etat.appels.push(nom);
     if (echecs[nom]) throw new Error(`échec simulé : ${nom}`);
   };
 
+  // --- Primitives de libération (celles que libererAvecRepli reçoit) ---
+  const prim = {
+    async liberer(cle, identite) {
+      peutLever("liberer");
+      if (retoursFalse.liberer) return false;      // transaction non commitée
+      if (etat.statut !== "encours") return false;
+      etat.statut = "afaire";
+      etat.meta = { updatedBy: identite, updatedAt: 2, termineAt: null };
+      return true;
+    },
+
+    async remettreAFaire(cle) {
+      // Le repli de libération et le rollback de réservation sont la même
+      // primitive : on les distingue par la phase en cours.
+      const nom = etat.phase === "liberation" ? "remettreAFaireRepli" : "remettreAFaire";
+      peutLever(nom);
+      if (retoursFalse[nom]) return false;         // transaction non commitée
+      if (etat.statut !== "encours") return false;
+      etat.statut = "afaire";
+      return true;
+    },
+  };
+
   const ops = {
     async claimStatut() {
-      peutEchouer("claimStatut");
+      peutLever("claimStatut");
       if (etat.statut !== "afaire") return false;
       etat.statut = "encours";
       return true;
     },
 
     async ecrireMetaReservation(cle, identite) {
-      peutEchouer("ecrireMetaReservation");
+      peutLever("ecrireMetaReservation");
       etat.meta = { updatedBy: identite, updatedAt: 1, termineAt: null };
     },
 
-    async remettreAFaire() {
-      peutEchouer("remettreAFaire");
-      if (etat.statut !== "encours") return false;
-      etat.statut = "afaire";
-      return true;
-    },
+    remettreAFaire: (cle) => prim.remettreAFaire(cle),
 
     async demarrerEtat(cle, identite) {
-      peutEchouer("demarrerEtat");
+      peutLever("demarrerEtat");
       etat.seoRobot = { etat: "reserve", parQui: identite };
     },
 
     async avancerEtat(cle, e) {
-      peutEchouer("avancerEtat");
+      peutLever("avancerEtat");
       etat.seoRobot = { ...(etat.seoRobot || {}), etat: e };
     },
 
     async analyser() {
-      peutEchouer("analyser");
+      peutLever("analyser");
       return analyse;
     },
 
     async ajouterRapport(cle, corps) {
-      peutEchouer("ajouterRapport");
+      peutLever("ajouterRapport");
       etat.rapportsEcrits++;
       etat.note = `${etat.note}\n\n${corps}`;
     },
@@ -75,27 +108,13 @@ export function creerFauxOps(options = {}) {
       etat.seoRobot = { ...(etat.seoRobot || {}), etat: "echec", derniereErreur: String(motif) };
     },
 
-    // Filet final : ne lève jamais, renvoie true/false.
+    // Délègue au VRAI filet de lib/flow.js.
     async libererSurement(cle, identite) {
+      etat.phase = "liberation";
       etat.appels.push("libererSurement");
-      try {
-        if (echecs.liberer) throw new Error("échec simulé : liberer");
-        if (etat.statut === "encours") {
-          etat.statut = "afaire";
-          etat.meta = { updatedBy: identite, updatedAt: 2, termineAt: null };
-        }
-        return true;
-      } catch {
-        try {
-          if (echecs.remettreAFaireFinal) throw new Error("échec simulé : repli");
-          if (etat.statut === "encours") etat.statut = "afaire";
-          return true;
-        } catch {
-          return false;
-        }
-      }
+      return libererAvecRepli(prim, cle, identite);
     },
   };
 
-  return { ops, etat };
+  return { ops, etat, prim };
 }

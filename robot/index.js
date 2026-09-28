@@ -27,7 +27,7 @@ import { analyser } from "./lib/analyse.js";
 import { claimStatut, ecrireMetaReservation, remettreAFaire, liberer } from "./lib/claim.js";
 import { demarrer, avancer, echouer, lireEtat, verrouPerime } from "./lib/state.js";
 import { ajouterRapport } from "./lib/report.js";
-import { traiterAvecFilet, ISSUES } from "./lib/flow.js";
+import { traiterAvecFilet, libererAvecRepli, ISSUES, MOTIFS } from "./lib/flow.js";
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 
@@ -69,24 +69,22 @@ function creerOperations(db) {
     },
 
     // Filet final : la fiche ne doit jamais rester en « encours ».
-    libererSurement: async (cle, identite) => {
-      try {
-        await liberer(db, cle, identite);
-        log.ok(`   Fiche ${cle} rendue (afaire).`);
-        return true;
-      } catch (e) {
-        log.alerte(`   Libération normale impossible (${erreurLisible(e)}) — tentative de repli.`);
-        try {
-          await remettreAFaire(db, cle);
-          log.ok(`   Fiche ${cle} rendue par repli (statut seul).`);
-          return true;
-        } catch (e2) {
-          log.erreur(`   ⛔ Fiche ${cle} LAISSÉE EN « encours » : ${erreurLisible(e2)}`);
-          log.erreur("      Intervention manuelle nécessaire dans la console Firebase.");
-          return false;
+    // Renvoie true UNIQUEMENT si la libération est confirmée (voir lib/flow.js).
+    libererSurement: (cle, identite) =>
+      libererAvecRepli(
+        {
+          liberer: (c, id) => liberer(db, c, id),
+          remettreAFaire: (c) => remettreAFaire(db, c),
+        },
+        cle,
+        identite,
+        {
+          ok: (m) => log.ok(`   ${m}`),
+          alerte: (m) => log.alerte(`   ${m}`),
+          erreur: (m) => log.erreur(`   ${m}`),
+          format: erreurLisible,
         }
-      }
-    },
+      ),
   };
 }
 
@@ -104,17 +102,27 @@ async function traiterFiche(db, fiche, identite, controle) {
       log.ignore(`   Fiche ${cle} : déjà prise par quelqu'un d'autre.`);
       return "collision";
 
-    case ISSUES.ECHEC_RESERVATION:
-      if (res.detail && res.detail.motif === "meta_echec_rollback_echoue") {
+    case ISSUES.ECHEC_RESERVATION: {
+      const motif = res.detail && res.detail.motif;
+      if (motif === MOTIFS.ROLLBACK_OK) {
+        log.alerte(`   Fiche ${cle} : métadonnées en échec, fiche remise en « afaire » (confirmé).`);
+      } else if (motif === MOTIFS.ROLLBACK_NON_CONFIRME) {
+        log.erreur(`   ⛔ Fiche ${cle} : métadonnées en échec et rollback NON CONFIRMÉ.`);
+        log.erreur("      Le statut n'a pas pu être ramené à « afaire » — à vérifier dans la console Firebase.");
+      } else {
         log.erreur(`   ⛔ Fiche ${cle} : métadonnées en échec ET repli impossible — fiche en « encours ».`);
         log.erreur("      Intervention manuelle nécessaire dans la console Firebase.");
-      } else {
-        log.alerte(`   Fiche ${cle} : métadonnées en échec, fiche remise en « afaire ».`);
       }
       return "echec";
+    }
 
     case ISSUES.ANALYSE_INDISPONIBLE:
-      log.alerte(`   Fiche ${cle} : ${res.motif || "analyse indisponible"} — fiche rendue.`);
+      // res.libere n'est true que si la libération a été CONFIRMÉE.
+      if (res.libere === true) {
+        log.alerte(`   Fiche ${cle} : ${res.motif || "analyse indisponible"} — fiche rendue.`);
+      } else {
+        log.erreur(`   ⛔ Fiche ${cle} : ${res.motif || "analyse indisponible"}, et libération NON CONFIRMÉE.`);
+      }
       return "analyse_indisponible";
 
     case ISSUES.PRET_A_VALIDER:
@@ -123,6 +131,9 @@ async function traiterFiche(db, fiche, identite, controle) {
 
     default:
       log.erreur(`   Fiche ${cle} : ${erreurLisible(res.erreur)}`);
+      if (res.libere !== true) {
+        log.erreur(`   ⛔ Fiche ${cle} : libération NON CONFIRMÉE après cet échec.`);
+      }
       return "echec";
   }
 }

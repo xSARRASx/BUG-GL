@@ -19,7 +19,7 @@ import { initGuard, assertWriteAllowed, assertTermineAllowed, estAutorisee, getA
 import { verifier } from "../lib/validate.js";
 import { resumeAnonyme, nettoyerTexte, valeursSensiblesDe, CHAMPS_SENSIBLES } from "../lib/redact.js";
 import { entete, composerNote } from "../lib/note.js";
-import { traiterAvecFilet, reserverAvecFilet, ISSUES } from "../lib/flow.js";
+import { traiterAvecFilet, reserverAvecFilet, libererAvecRepli, rollbackConfirme, ISSUES, MOTIFS } from "../lib/flow.js";
 import { creerFauxOps } from "./fauxops.js";
 
 const CLE = "-P2atEDbwnjG7JWnxhH2";
@@ -312,16 +312,16 @@ await testAsync("échec de tenterEtatEchec : la fiche est quand même rendue", a
   assert.equal(etat.statut, "afaire", "un échec de journalisation ne doit pas bloquer la fiche");
 });
 
-await testAsync("échec de la libération normale : le repli statut-seul rend la fiche", async () => {
+await testAsync("exception à la libération normale : le repli statut-seul rend la fiche", async () => {
   const { ops, etat } = creerFauxOps({ echecs: { demarrerEtat: true, liberer: true } });
   const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
   assert.equal(etat.statut, "afaire", "le repli doit avoir fonctionné");
   assert.equal(r.libere, true);
 });
 
-await testAsync("échec de la libération ET du repli : signalé explicitement", async () => {
+await testAsync("exception à la libération ET au repli : signalé explicitement", async () => {
   const { ops, etat } = creerFauxOps({
-    echecs: { demarrerEtat: true, liberer: true, remettreAFaireFinal: true },
+    echecs: { demarrerEtat: true, liberer: true, remettreAFaireRepli: true },
   });
   const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
   assert.equal(etat.statut, "encours", "cas résiduel : la fiche reste bloquée");
@@ -334,7 +334,7 @@ await testAsync("métadonnées en échec : rollback immédiat du statut", async 
   const { ops, etat } = creerFauxOps({ echecs: { ecrireMetaReservation: true } });
   const r = await reserverAvecFilet(ops, CLE, "Robot SEO");
   assert.equal(r.obtenue, false);
-  assert.equal(r.motif, "meta_echec_rollback_ok");
+  assert.equal(r.motif, MOTIFS.ROLLBACK_OK);
   assert.equal(etat.statut, "afaire", "le statut doit être revenu à afaire");
 });
 
@@ -344,7 +344,7 @@ await testAsync("métadonnées en échec + rollback en échec : signalé, non si
   });
   const r = await reserverAvecFilet(ops, CLE, "Robot SEO");
   assert.equal(r.obtenue, false);
-  assert.equal(r.motif, "meta_echec_rollback_echoue");
+  assert.equal(r.motif, MOTIFS.ROLLBACK_ECHOUE);
   assert.equal(etat.statut, "encours");
   assert.ok(r.erreur && r.erreurRollback, "les deux erreurs doivent remonter");
 });
@@ -380,6 +380,99 @@ await testAsync("chemin nominal complet : la fiche reste en encours pour validat
   assert.equal(etat.statut, "encours", "elle attend une validation, elle ne doit pas être rendue");
   assert.equal(etat.seoRobot.etat, "pret_a_valider");
   assert.equal(etat.rapportsEcrits, 1);
+});
+
+
+console.log("\n=== RETOURS `false` : ÉCHEC SANS EXCEPTION ===");
+console.log("    (une transaction non commitée n'est PAS un succès)");
+
+await testAsync("réservation : métadonnées en échec + rollback renvoie false → non confirmé", async () => {
+  const { ops, etat } = creerFauxOps({
+    echecs: { ecrireMetaReservation: true },
+    retoursFalse: { remettreAFaire: true },
+  });
+  const r = await reserverAvecFilet(ops, CLE, "Robot SEO");
+  assert.equal(r.obtenue, false);
+  assert.equal(r.motif, MOTIFS.ROLLBACK_NON_CONFIRME,
+    "un rollback non commité ne doit jamais être annoncé comme réussi");
+  assert.notEqual(r.motif, MOTIFS.ROLLBACK_OK);
+  assert.equal(etat.statut, "encours", "la fiche est effectivement restée en encours");
+});
+
+await testAsync("rollbackConfirme() ne valide que le cas réellement confirmé", async () => {
+  assert.equal(rollbackConfirme(MOTIFS.ROLLBACK_OK), true);
+  assert.equal(rollbackConfirme(MOTIFS.ROLLBACK_NON_CONFIRME), false);
+  assert.equal(rollbackConfirme(MOTIFS.ROLLBACK_ECHOUE), false);
+});
+
+await testAsync("libération normale renvoie false → repli tenté, puis confirmé", async () => {
+  const { prim, etat } = creerFauxOps({ statutInitial: "encours", retoursFalse: { liberer: true } });
+  etat.phase = "liberation";
+  const ok = await libererAvecRepli(prim, CLE, "Robot SEO");
+  assert.equal(ok, true, "le repli a commité, la libération est confirmée");
+  assert.equal(etat.statut, "afaire");
+  assert.ok(etat.appels.includes("remettreAFaireRepli"), "le repli doit avoir été tenté");
+});
+
+await testAsync("libération ET repli renvoient false → aucune libération annoncée", async () => {
+  const { prim, etat } = creerFauxOps({
+    statutInitial: "encours",
+    retoursFalse: { liberer: true, remettreAFaireRepli: true },
+  });
+  etat.phase = "liberation";
+  const ok = await libererAvecRepli(prim, CLE, "Robot SEO");
+  assert.equal(ok, false, "sans confirmation, le résultat doit être false");
+  assert.equal(etat.statut, "encours");
+});
+
+await testAsync("repli renvoie false après une exception : échec préservé", async () => {
+  const { prim, etat } = creerFauxOps({
+    statutInitial: "encours",
+    echecs: { liberer: true },
+    retoursFalse: { remettreAFaireRepli: true },
+  });
+  etat.phase = "liberation";
+  const ok = await libererAvecRepli(prim, CLE, "Robot SEO");
+  assert.equal(ok, false);
+  assert.equal(etat.statut, "encours");
+});
+
+await testAsync("aucun message de succès n'est émis sans confirmation", async () => {
+  const messages = { ok: [], alerte: [], erreur: [] };
+  const { prim, etat } = creerFauxOps({
+    statutInitial: "encours",
+    retoursFalse: { liberer: true, remettreAFaireRepli: true },
+  });
+  etat.phase = "liberation";
+  const ok = await libererAvecRepli(prim, CLE, "Robot SEO", {
+    ok: (m) => messages.ok.push(m),
+    alerte: (m) => messages.alerte.push(m),
+    erreur: (m) => messages.erreur.push(m),
+  });
+  assert.equal(ok, false);
+  assert.equal(messages.ok.length, 0, "aucun « fiche rendue » ne doit être journalisé");
+  assert.ok(messages.erreur.length > 0, "l'échec doit être signalé");
+});
+
+await testAsync("flux complet : libération non confirmée remonte dans res.libere", async () => {
+  const { ops, etat } = creerFauxOps({
+    echecs: { demarrerEtat: true },
+    retoursFalse: { liberer: true, remettreAFaireRepli: true },
+  });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.ECHEC);
+  assert.equal(r.libere, false, "le flux doit signaler la non-confirmation");
+  assert.equal(etat.statut, "encours");
+});
+
+await testAsync("analyse indisponible + libération non confirmée : res.libere vaut false", async () => {
+  const { ops, etat } = creerFauxOps({
+    retoursFalse: { liberer: true, remettreAFaireRepli: true },
+  });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.ANALYSE_INDISPONIBLE);
+  assert.equal(r.libere, false, "ne pas annoncer « fiche rendue » sans confirmation");
+  assert.equal(etat.statut, "encours");
 });
 
 console.log(`\n${ok} test(s) réussi(s).${process.exitCode ? " ⚠️ Des tests ont échoué." : " Tout est vert."}\n`);
