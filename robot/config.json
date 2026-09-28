@@ -1,7 +1,7 @@
 {
   "_commentaire": "Configuration du Robot SEO. Trois verrous independants : dryRun, allowedTestIds, autoTermine. Chacun est ferme par defaut.",
 
-  "dryRun": false,
+  "dryRun": true,
   "autoTermine": false,
 
   "allowedTestIds": ["-P2atEDbwnjG7JWnxhH2"],
