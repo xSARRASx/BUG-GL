@@ -24,9 +24,10 @@ import { verifier } from "./lib/validate.js";
 import { resumeAnonyme, valeursSensiblesDe } from "./lib/redact.js";
 import { analyser } from "./lib/analyse.js";
 
-import { reserver, liberer } from "./lib/claim.js";
-import { demarrer, avancer, echouer, lireEtat, verrouPerime, ETATS } from "./lib/state.js";
+import { claimStatut, ecrireMetaReservation, remettreAFaire, liberer } from "./lib/claim.js";
+import { demarrer, avancer, echouer, lireEtat, verrouPerime } from "./lib/state.js";
 import { ajouterRapport } from "./lib/report.js";
+import { traiterAvecFilet, ISSUES } from "./lib/flow.js";
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 
@@ -42,45 +43,87 @@ function lireConfig() {
 }
 
 // -------------------------------------------------------------
+//  Opérations réelles injectées dans le flux (lib/flow.js)
+//  Les deux dernières sont « best effort » : elles ne lèvent jamais,
+//  car ce sont elles qui protègent la fiche d'un blocage.
+// -------------------------------------------------------------
+function creerOperations(db) {
+  return {
+    claimStatut: (cle) => claimStatut(db, cle),
+    ecrireMetaReservation: (cle, identite) => ecrireMetaReservation(db, cle, identite),
+    remettreAFaire: (cle) => remettreAFaire(db, cle),
+
+    demarrerEtat: (cle, identite) => demarrer(db, cle, identite),
+    avancerEtat: (cle, etat) => avancer(db, cle, etat),
+
+    analyser: (contexte) => analyser(contexte),
+    ajouterRapport: (cle, rapport) => ajouterRapport(db, cle, rapport),
+
+    // Best effort : trace l'échec dans /seoRobot sans jamais faire échouer le flux.
+    tenterEtatEchec: async (cle, motif) => {
+      try {
+        await echouer(db, cle, erreurLisible(motif));
+      } catch (e) {
+        log.alerte(`   État d'échec non enregistré : ${erreurLisible(e)}`);
+      }
+    },
+
+    // Filet final : la fiche ne doit jamais rester en « encours ».
+    libererSurement: async (cle, identite) => {
+      try {
+        await liberer(db, cle, identite);
+        log.ok(`   Fiche ${cle} rendue (afaire).`);
+        return true;
+      } catch (e) {
+        log.alerte(`   Libération normale impossible (${erreurLisible(e)}) — tentative de repli.`);
+        try {
+          await remettreAFaire(db, cle);
+          log.ok(`   Fiche ${cle} rendue par repli (statut seul).`);
+          return true;
+        } catch (e2) {
+          log.erreur(`   ⛔ Fiche ${cle} LAISSÉE EN « encours » : ${erreurLisible(e2)}`);
+          log.erreur("      Intervention manuelle nécessaire dans la console Firebase.");
+          return false;
+        }
+      }
+    },
+  };
+}
+
+// -------------------------------------------------------------
 //  Traitement d'une fiche (mode actif — inerte en dry-run)
 // -------------------------------------------------------------
 async function traiterFiche(db, fiche, identite, controle) {
   const cle = fiche._cle;
+  const ops = creerOperations(db);
 
-  const obtenue = await reserver(db, cle, identite);
-  if (!obtenue) return "collision";
+  const res = await traiterAvecFilet(ops, cle, identite, controle.contexte);
 
-  await demarrer(db, cle, identite);
+  switch (res.issue) {
+    case ISSUES.COLLISION:
+      log.ignore(`   Fiche ${cle} : déjà prise par quelqu'un d'autre.`);
+      return "collision";
 
-  try {
-    await avancer(db, cle, ETATS.ANALYSE);
-    const resultat = await analyser(controle.contexte);
+    case ISSUES.ECHEC_RESERVATION:
+      if (res.detail && res.detail.motif === "meta_echec_rollback_echoue") {
+        log.erreur(`   ⛔ Fiche ${cle} : métadonnées en échec ET repli impossible — fiche en « encours ».`);
+        log.erreur("      Intervention manuelle nécessaire dans la console Firebase.");
+      } else {
+        log.alerte(`   Fiche ${cle} : métadonnées en échec, fiche remise en « afaire ».`);
+      }
+      return "echec";
 
-    if (!resultat.disponible) {
-      // V1 : l'analyse n'est pas branchée → on rend la fiche telle qu'on l'a prise.
-      log.alerte(`Fiche ${cle} : ${resultat.motif} — fiche libérée.`);
-      await liberer(db, cle, identite);
-      await avancer(db, cle, ETATS.ECHEC, { derniereErreur: resultat.motif });
+    case ISSUES.ANALYSE_INDISPONIBLE:
+      log.alerte(`   Fiche ${cle} : ${res.motif || "analyse indisponible"} — fiche rendue.`);
       return "analyse_indisponible";
-    }
 
-    await ajouterRapport(db, cle, resultat.rapport);
-    await avancer(db, cle, ETATS.RAPPORT_ECRIT);
+    case ISSUES.PRET_A_VALIDER:
+      log.ok(`   Fiche ${cle} : compte rendu écrit, en attente de validation humaine.`);
+      return "pret_a_valider";
 
-    // 🔒 On s'arrête ici. Le passage en « terminé » reste humain
-    //    tant que autoTermine vaut false.
-    await avancer(db, cle, ETATS.PRET_A_VALIDER);
-    return "pret_a_valider";
-  } catch (e) {
-    const msg = erreurLisible(e);
-    log.erreur(`Fiche ${cle} : ${msg}`);
-    try {
-      await echouer(db, cle, msg);
-      await liberer(db, cle, identite);
-    } catch (e2) {
-      log.erreur(`Fiche ${cle} : libération impossible — ${erreurLisible(e2)}`);
-    }
-    return "echec";
+    default:
+      log.erreur(`   Fiche ${cle} : ${erreurLisible(res.erreur)}`);
+      return "echec";
   }
 }
 
@@ -126,7 +169,7 @@ async function main() {
     }
 
     log.titre("VÉRIFICATION");
-    const bilan = { traitables: 0, bloquees: 0, horsListe: 0, collisions: 0, echecs: 0, pretes: 0 };
+    const bilan = { traitables: 0, bloquees: 0, horsListe: 0, collisions: 0, echecs: 0, pretes: 0, analyseIndispo: 0 };
 
     for (const fiche of aTraiter) {
       // Toute valeur sensible de cette fiche est masquée dans la suite des logs.
@@ -186,6 +229,7 @@ async function main() {
       const issue = await traiterFiche(db, fiche, identite, controle);
       if (issue === "collision") bilan.collisions++;
       else if (issue === "pret_a_valider") bilan.pretes++;
+      else if (issue === "analyse_indisponible") bilan.analyseIndispo++;
       else bilan.echecs++;
     }
 
@@ -196,6 +240,7 @@ async function main() {
     if (!dryRun) {
       log.info(`Hors liste blanche ..... ${bilan.horsListe}`);
       log.info(`Prêtes à valider ....... ${bilan.pretes}`);
+      log.info(`Analyse indisponible ... ${bilan.analyseIndispo}`);
       log.info(`Collisions ............. ${bilan.collisions}`);
       log.info(`Échecs ................. ${bilan.echecs}`);
     }

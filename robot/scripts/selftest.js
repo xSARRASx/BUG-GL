@@ -19,8 +19,22 @@ import { initGuard, assertWriteAllowed, assertTermineAllowed, estAutorisee, getA
 import { verifier } from "../lib/validate.js";
 import { resumeAnonyme, nettoyerTexte, valeursSensiblesDe, CHAMPS_SENSIBLES } from "../lib/redact.js";
 import { entete, composerNote } from "../lib/note.js";
+import { traiterAvecFilet, reserverAvecFilet, ISSUES } from "../lib/flow.js";
+import { creerFauxOps } from "./fauxops.js";
+
+const CLE = "-P2atEDbwnjG7JWnxhH2";
 
 let ok = 0;
+async function testAsync(nom, fn) {
+  try {
+    await fn();
+    console.log(`  ✅ ${nom}`);
+    ok++;
+  } catch (e) {
+    console.error(`  ❌ ${nom}\n     ${e.message}`);
+    process.exitCode = 1;
+  }
+}
 function test(nom, fn) {
   try {
     fn();
@@ -244,6 +258,128 @@ test("mode actif : seule la fiche listée est écrivable, terminé toujours refu
 test("mode actif + liste vide : aucune écriture possible", () => {
   const sortie = execFileSync(process.execPath, [resolve(ICI, "scenarios/actif-liste-vide.js")], { encoding: "utf8" });
   assert.match(sortie, /SCENARIO_OK/);
+});
+
+console.log("\n=== FLUX : ÉCHECS PARTIELS APRÈS LE CLAIM ===");
+console.log("    (invariant : la fiche ne doit jamais rester en « encours »)");
+
+await testAsync("chemin nominal V1.1 — analyse indisponible : la fiche est rendue", async () => {
+  const { ops, etat } = creerFauxOps();
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.ANALYSE_INDISPONIBLE);
+  assert.equal(etat.statut, "afaire", "la fiche doit être rendue");
+  assert.equal(etat.rapportsEcrits, 0, "aucun rapport ne doit être écrit");
+  assert.equal(etat.note, "Note existante de Camille.", "la note doit être intacte");
+  assert.equal(etat.seoRobot.etat, "echec");
+});
+
+await testAsync("échec de demarrerEtat : la fiche est rendue", async () => {
+  const { ops, etat } = creerFauxOps({ echecs: { demarrerEtat: true } });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.ECHEC);
+  assert.equal(etat.statut, "afaire", "la fiche ne doit pas rester en encours");
+});
+
+await testAsync("échec de avancerEtat : la fiche est rendue", async () => {
+  const { ops, etat } = creerFauxOps({ echecs: { avancerEtat: true } });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.ECHEC);
+  assert.equal(etat.statut, "afaire");
+});
+
+await testAsync("échec de analyser : la fiche est rendue", async () => {
+  const { ops, etat } = creerFauxOps({ echecs: { analyser: true } });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.ECHEC);
+  assert.equal(etat.statut, "afaire");
+});
+
+await testAsync("échec de ajouterRapport : la fiche est rendue, note non corrompue", async () => {
+  const { ops, etat } = creerFauxOps({
+    echecs: { ajouterRapport: true },
+    analyse: { disponible: true, rapport: "Rapport." },
+  });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.ECHEC);
+  assert.equal(etat.statut, "afaire");
+  assert.equal(etat.note, "Note existante de Camille.");
+});
+
+await testAsync("échec de tenterEtatEchec : la fiche est quand même rendue", async () => {
+  const { ops, etat } = creerFauxOps({ echecs: { demarrerEtat: true, tenterEtatEchec: true } });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.ECHEC);
+  assert.equal(etat.statut, "afaire", "un échec de journalisation ne doit pas bloquer la fiche");
+});
+
+await testAsync("échec de la libération normale : le repli statut-seul rend la fiche", async () => {
+  const { ops, etat } = creerFauxOps({ echecs: { demarrerEtat: true, liberer: true } });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(etat.statut, "afaire", "le repli doit avoir fonctionné");
+  assert.equal(r.libere, true);
+});
+
+await testAsync("échec de la libération ET du repli : signalé explicitement", async () => {
+  const { ops, etat } = creerFauxOps({
+    echecs: { demarrerEtat: true, liberer: true, remettreAFaireFinal: true },
+  });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(etat.statut, "encours", "cas résiduel : la fiche reste bloquée");
+  assert.equal(r.libere, false, "le flux doit le signaler pour alerte humaine");
+});
+
+console.log("\n=== RÉSERVATION : ÉCHEC DES MÉTADONNÉES ===");
+
+await testAsync("métadonnées en échec : rollback immédiat du statut", async () => {
+  const { ops, etat } = creerFauxOps({ echecs: { ecrireMetaReservation: true } });
+  const r = await reserverAvecFilet(ops, CLE, "Robot SEO");
+  assert.equal(r.obtenue, false);
+  assert.equal(r.motif, "meta_echec_rollback_ok");
+  assert.equal(etat.statut, "afaire", "le statut doit être revenu à afaire");
+});
+
+await testAsync("métadonnées en échec + rollback en échec : signalé, non silencieux", async () => {
+  const { ops, etat } = creerFauxOps({
+    echecs: { ecrireMetaReservation: true, remettreAFaire: true },
+  });
+  const r = await reserverAvecFilet(ops, CLE, "Robot SEO");
+  assert.equal(r.obtenue, false);
+  assert.equal(r.motif, "meta_echec_rollback_echoue");
+  assert.equal(etat.statut, "encours");
+  assert.ok(r.erreur && r.erreurRollback, "les deux erreurs doivent remonter");
+});
+
+await testAsync("le flux complet propage un échec de réservation sans lancer le traitement", async () => {
+  const { ops, etat } = creerFauxOps({ echecs: { ecrireMetaReservation: true } });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.ECHEC_RESERVATION);
+  assert.equal(etat.statut, "afaire");
+  assert.ok(!etat.appels.includes("demarrerEtat"), "le traitement ne doit pas démarrer");
+});
+
+await testAsync("collision : fiche déjà prise, rien n'est touché", async () => {
+  const { ops, etat } = creerFauxOps({ statutInitial: "encours" });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.COLLISION);
+  assert.equal(etat.statut, "encours");
+  assert.equal(etat.seoRobot, null, "aucun état ne doit être créé");
+});
+
+await testAsync("jamais de passage en « termine », quel que soit le chemin", async () => {
+  for (const echecs of [{}, { demarrerEtat: true }, { analyser: true }, { ajouterRapport: true }]) {
+    const { ops, etat } = creerFauxOps({ echecs, analyse: { disponible: true, rapport: "R." } });
+    await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+    assert.notEqual(etat.statut, "termine");
+  }
+});
+
+await testAsync("chemin nominal complet : la fiche reste en encours pour validation humaine", async () => {
+  const { ops, etat } = creerFauxOps({ analyse: { disponible: true, rapport: "Rapport." } });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.PRET_A_VALIDER);
+  assert.equal(etat.statut, "encours", "elle attend une validation, elle ne doit pas être rendue");
+  assert.equal(etat.seoRobot.etat, "pret_a_valider");
+  assert.equal(etat.rapportsEcrits, 1);
 });
 
 console.log(`\n${ok} test(s) réussi(s).${process.exitCode ? " ⚠️ Des tests ont échoué." : " Tout est vert."}\n`);

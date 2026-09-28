@@ -36,7 +36,8 @@ Le mode actif est entièrement écrit et protégé par le garde-fou :
 
 | Module | Rôle | Statut |
 |---|---|---|
-| `lib/claim.js` | Réservation atomique `afaire → encours` par transaction | inactif |
+| `lib/claim.js` | Primitives de réservation atomique par transaction | inactif |
+| `lib/flow.js` | Enchaînement + filets : la fiche ne reste jamais en `encours` | pur |
 | `lib/state.js` | État du traitement dans `/seoRobot` | inactif |
 | `lib/report.js` | Ajout du compte rendu par transaction, sans écraser la note | inactif |
 | `lib/analyse.js` | Analyse SEO | **stub volontaire** |
@@ -115,8 +116,12 @@ Trois protections se cumulent :
 
 ## Lancer LE test actif ciblé
 
-Prérequis : publier les règles Firebase (`/seo` + `/seoRobot`) — voir
-`firebase-rules.json` à la racine.
+Prérequis : publier les règles Firebase (`/seo` + `/seoRobot`).
+
+`firebase-rules.json` à la racine est un fichier de règles **directement
+déployable** : son contenu se copie tel quel dans Firebase Console →
+Realtime Database → Règles → Publier. Les UID qu'il contient sont ceux de
+Martin, Camille et du compte Robot SEO.
 
 Un seul changement : dans `robot/config.json`, passer
 
@@ -148,8 +153,32 @@ Le contrôle pré-vol du workflow refuse le mode actif :
 | Compte rendu | **aucun** — `note` non modifiée |
 | Statut `termine` | **jamais** |
 
-La fiche doit donc se retrouver **exactement dans son état initial**
-(`afaire`, note intacte), avec une trace dans `/seoRobot`.
+### État de la fiche après le test
+
+Son **statut** revient à `afaire` et sa **note** est intacte, mais la fiche
+n'est pas identique à ce qu'elle était :
+
+* `updatedAt` a été réécrit (deux fois : réservation, puis libération) ;
+* `updatedBy` porte désormais le nom du compte robot ;
+* `termineAt` a été explicitement remis à `null`.
+
+Ces trois champs sont ceux que l'app écrit elle-même à chaque modification.
+Aucune donnée client n'est touchée.
+
+Une entrée `/seoRobot/{id}` subsiste, avec `etat: "echec"` et le motif —
+c'est la trace du passage, à consulter dans la console Firebase.
+
+### Garantie en cas d'erreur
+
+Si n'importe quelle étape échoue après la réservation, la fiche est **toujours**
+remise en `afaire` :
+
+1. libération normale (statut + métadonnées) ;
+2. si elle échoue → repli sur le statut seul, qui a plus de chances d'aboutir ;
+3. si les deux échouent → le robot l'écrit en rouge dans les logs et demande
+   une intervention manuelle. Ce cas résiduel est couvert par un test.
+
+Le statut `termine` n'est écrit sur aucun de ces chemins.
 
 **Après le test : remettre `"dryRun": true`.**
 
@@ -171,11 +200,13 @@ robot/
 │   ├── validate.js       Champs obligatoires et garde-fous métier
 │   ├── claim.js          Réservation atomique (inactif)
 │   ├── state.js          État /seoRobot (inactif)
+│   ├── flow.js           🧷 Flux + filets de sécurité (pur, testable hors ligne)
 │   ├── note.js           Composition du compte rendu (pur, testable hors ligne)
 │   ├── report.js         Ajout du compte rendu (inactif)
 │   └── analyse.js        Analyse SEO (stub)
 └── scripts/
-    ├── selftest.js       26 tests, sans dépendance ni réseau
+    ├── selftest.js       40 tests, sans dépendance ni réseau
+    ├── fauxops.js        Faux magasin Firebase pour tester les échecs partiels
     └── scenarios/        Scénarios de mode actif (processus séparés)
 ```
 
