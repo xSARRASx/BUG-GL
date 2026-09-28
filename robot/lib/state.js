@@ -31,7 +31,7 @@ export async function lireEtat(db, cle) {
 
 /** Crée l'entrée d'état au moment de la réservation. */
 export async function demarrer(db, cle, identite) {
-  assertWriteAllowed(`création de l'état /seoRobot/${cle}`);
+  assertWriteAllowed(`création de l'état /seoRobot/${cle}`, cle);
   const maintenant = Date.now();
   await set(ref(db, chemin(cle)), {
     etat: ETATS.RESERVE,
@@ -45,7 +45,7 @@ export async function demarrer(db, cle, identite) {
 
 /** Met à jour l'état et rafraîchit le battement de cœur. */
 export async function avancer(db, cle, etat, extra = {}) {
-  assertWriteAllowed(`mise à jour de l'état /seoRobot/${cle} → ${etat}`);
+  assertWriteAllowed(`mise à jour de l'état /seoRobot/${cle} → ${etat}`, cle);
   await update(ref(db, chemin(cle)), {
     etat,
     heartbeat: Date.now(),
@@ -55,7 +55,7 @@ export async function avancer(db, cle, etat, extra = {}) {
 
 /** Signale un échec. Le message est déjà nettoyé par l'appelant. */
 export async function echouer(db, cle, messageNettoye) {
-  assertWriteAllowed(`enregistrement d'un échec sur /seoRobot/${cle}`);
+  assertWriteAllowed(`enregistrement d'un échec sur /seoRobot/${cle}`, cle);
   await update(ref(db, chemin(cle)), {
     etat: ETATS.ECHEC,
     heartbeat: Date.now(),
@@ -64,7 +64,7 @@ export async function echouer(db, cle, messageNettoye) {
 }
 
 export async function effacer(db, cle) {
-  assertWriteAllowed(`suppression de l'état /seoRobot/${cle}`);
+  assertWriteAllowed(`suppression de l'état /seoRobot/${cle}`, cle);
   await remove(ref(db, chemin(cle)));
 }
 

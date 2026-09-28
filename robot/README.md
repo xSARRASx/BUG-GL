@@ -1,4 +1,4 @@
-# Robot SEO — V1 (dry-run)
+# Robot SEO — V1.1 (dry-run, prêt pour un test actif ciblé)
 
 Robot de détection des fiches SEO à traiter, pour le projet
 [Suivi SEO Guest Lucky](https://xsarrasx.github.io/BUG-GL/seo.html).
@@ -6,9 +6,15 @@ Robot de détection des fiches SEO à traiter, pour le projet
 > ## 🔒 État actuel : DRY-RUN STRICT
 >
 > **Le robot ne modifie rien.** Il lit, vérifie, affiche un résumé anonymisé,
-> et s'arrête. Aucune écriture Firebase n'est possible : `robot/config.json`
-> est en `"dryRun": true`, et `lib/guard.js` bloque toute tentative d'écriture
-> avant même que le SDK Firebase soit sollicité.
+> et s'arrête.
+>
+> Trois verrous indépendants, tous fermés par défaut :
+>
+> | Verrou | Valeur | Effet |
+> |---|---|---|
+> | `dryRun` | `true` | aucune écriture, quelle que soit la fiche |
+> | `allowedTestIds` | 1 fiche | seule cette clé Firebase pourra être écrite |
+> | `autoTermine` | `false` | le passage en « terminé » reste humain |
 >
 > WordPress n'est jamais touché. Ni OpenAI ni OpenSEO ne sont branchés.
 
@@ -107,18 +113,45 @@ Trois protections se cumulent :
 
 ---
 
-## Passer en mode actif (plus tard)
+## Lancer LE test actif ciblé
 
-Ne pas faire avant d'avoir relu plusieurs exécutions en dry-run.
+Prérequis : publier les règles Firebase (`/seo` + `/seoRobot`) — voir
+`firebase-rules.json` à la racine.
 
-1. Créer le compte robot dans Firebase Console (et lui donner un `displayName`,
-   par exemple « Robot SEO »).
-2. Ajouter son UID aux règles `/seo` **et** créer les règles du nœud `/seoRobot`.
-3. Passer `"dryRun": false` dans `robot/config.json`.
-4. Retirer l'étape « Vérifier que le dry-run est bien actif » du workflow, qui
-   refuse volontairement de s'exécuter si `dryRun` n'est plus à `true`.
+Un seul changement : dans `robot/config.json`, passer
 
-`"autoTermine"` doit rester à `false`.
+```json
+"dryRun": false
+```
+
+`allowedTestIds` contient déjà uniquement la fiche de test, et `autoTermine`
+reste à `false`. **Ne toucher à rien d'autre.**
+
+Puis lancer **manuellement** : Actions → Robot SEO → Run workflow.
+
+Le contrôle pré-vol du workflow refuse le mode actif :
+
+* sur un déclenchement **cron** (le test ne peut donc pas se répéter tout seul) ;
+* si `allowedTestIds` est **vide** ;
+* si `autoTermine` est à **true**.
+
+### Déroulé attendu du test actif
+
+| Étape | Attendu |
+|---|---|
+| Réservation | `afaire` → `encours` par transaction |
+| `/seoRobot/{id}` | créé, `etat: "reserve"` |
+| État | passe à `analyse` |
+| Analyse | **indisponible** (stub) |
+| Libération | `encours` → `afaire` |
+| `/seoRobot/{id}` | `etat: "echec"`, motif renseigné |
+| Compte rendu | **aucun** — `note` non modifiée |
+| Statut `termine` | **jamais** |
+
+La fiche doit donc se retrouver **exactement dans son état initial**
+(`afaire`, note intacte), avec une trace dans `/seoRobot`.
+
+**Après le test : remettre `"dryRun": true`.**
 
 ---
 
@@ -138,10 +171,12 @@ robot/
 │   ├── validate.js       Champs obligatoires et garde-fous métier
 │   ├── claim.js          Réservation atomique (inactif)
 │   ├── state.js          État /seoRobot (inactif)
+│   ├── note.js           Composition du compte rendu (pur, testable hors ligne)
 │   ├── report.js         Ajout du compte rendu (inactif)
 │   └── analyse.js        Analyse SEO (stub)
 └── scripts/
-    └── selftest.js       19 tests hors ligne
+    ├── selftest.js       26 tests, sans dépendance ni réseau
+    └── scenarios/        Scénarios de mode actif (processus séparés)
 ```
 
 Voir aussi [`HANDOFF-AUTOMATISATION-SEO.md`](../HANDOFF-AUTOMATISATION-SEO.md)

@@ -1,7 +1,7 @@
-name: Robot SEO (dry-run)
+name: Robot SEO
 
 # =============================================================
-#  V1 — DRY-RUN STRICT
+#  V1.1 — DRY-RUN STRICT + liste blanche de test
 #  Ce workflow ne modifie AUCUNE donnée Firebase : robot/config.json
 #  est en "dryRun": true, et toute tentative d'écriture est bloquée
 #  par robot/lib/guard.js avant d'atteindre le SDK.
@@ -41,12 +41,12 @@ jobs:
 
     steps:
       - name: Récupérer le dépôt
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Installer Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: robot/package-lock.json
 
@@ -78,13 +78,42 @@ jobs:
         working-directory: robot
         run: node scripts/selftest.js
 
-      - name: Vérifier que le dry-run est bien actif
+      - name: Contrôle pré-vol (garde-fous de sécurité)
+        env:
+          EVENEMENT: ${{ github.event_name }}
         run: |
-          if ! grep -q '"dryRun": true' robot/config.json; then
-            echo "::error::robot/config.json n'est plus en dryRun:true — exécution refusée par sécurité."
-            exit 1
-          fi
-          echo "dryRun confirmé : aucune écriture ne sera possible."
+          node -e '
+            const fs = require("fs");
+            const cfg = JSON.parse(fs.readFileSync("robot/config.json", "utf8"));
+            const dryRun = cfg.dryRun !== false;
+            const autoTermine = cfg.autoTermine === true;
+            const ids = Array.isArray(cfg.allowedTestIds) ? cfg.allowedTestIds.filter(Boolean) : [];
+            const evenement = process.env.EVENEMENT;
+            const err = (m) => { console.log("::error::" + m); process.exit(1); };
+
+            console.log("dryRun ......... " + dryRun);
+            console.log("autoTermine .... " + autoTermine);
+            console.log("liste blanche .. " + (ids.length ? ids.join(", ") : "(vide)"));
+            console.log("déclencheur .... " + evenement);
+
+            // Verrou 1 : autoTermine doit rester désactivé.
+            if (autoTermine) err("autoTermine est à true — exécution refusée. Le passage en « terminé » doit rester humain.");
+
+            if (dryRun) {
+              console.log("Mode DRY-RUN : aucune écriture ne sera possible.");
+              process.exit(0);
+            }
+
+            // --- À partir d’ici, le mode actif est demandé ---
+
+            // Verrou 2 : la liste blanche doit désigner explicitement les fiches autorisées.
+            if (ids.length === 0) err("Mode actif demandé mais allowedTestIds est vide — exécution refusée.");
+
+            // Verrou 3 : un test actif se lance À LA MAIN, jamais en boucle par le cron.
+            if (evenement !== "workflow_dispatch") err("Mode actif interdit sur un déclenchement « " + evenement + " » : lance-le manuellement via Run workflow.");
+
+            console.log("::warning::MODE ACTIF — écritures autorisées sur " + ids.length + " fiche(s) : " + ids.join(", "));
+          '
 
       - name: Lancer le robot
         working-directory: robot

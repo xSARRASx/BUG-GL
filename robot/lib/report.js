@@ -7,32 +7,28 @@
 //  /seo/{cle}/note : la lecture et la concaténation sont atomiques,
 //  et Firebase rejoue l'opération si la valeur a changé.
 //
-//  ⚠️ INACTIF EN DRY-RUN.
+//  La logique de composition du texte vit dans lib/note.js, sans
+//  aucune dépendance, ce qui la rend testable hors ligne.
+//
+//  ⚠️ INACTIF EN DRY-RUN et hors liste blanche.
 // =============================================================
 
 import { ref, runTransaction } from "firebase/database";
 import { assertWriteAllowed } from "./guard.js";
+import { composerNote } from "./note.js";
 
-/** En-tête qui identifie clairement un ajout du robot. */
-export function entete(date = new Date()) {
-  const jour = date.toISOString().slice(0, 10);
-  return `--- Compte rendu Robot SEO — ${jour} ---`;
-}
+export { entete, composerNote } from "./note.js";
 
 /**
  * Ajoute un compte rendu à la fin de la note existante.
  * La note précédente est intégralement préservée.
  */
 export async function ajouterRapport(db, cle, corps, date = new Date()) {
-  assertWriteAllowed(`ajout d'un compte rendu sur /seo/${cle}/note`);
+  assertWriteAllowed(`ajout d'un compte rendu sur /seo/${cle}/note`, cle);
 
-  const bloc = `${entete(date)}\n${String(corps).trim()}`;
-
-  const res = await runTransaction(ref(db, `seo/${cle}/note`), (noteActuelle) => {
-    const existant = typeof noteActuelle === "string" ? noteActuelle : "";
-    if (existant.trim() === "") return bloc;
-    return `${existant.trimEnd()}\n\n${bloc}`;
-  });
+  const res = await runTransaction(ref(db, `seo/${cle}/note`), (noteActuelle) =>
+    composerNote(noteActuelle, corps, date)
+  );
 
   return res.committed;
 }

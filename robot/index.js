@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { initGuard, isDryRun, isAutoTermineAllowed, DryRunViolation } from "./lib/guard.js";
+import { initGuard, isDryRun, isAutoTermineAllowed, estAutorisee, getAllowedIds, DryRunViolation, FicheNonAutorisee } from "./lib/guard.js";
 import { log, erreurLisible, enregistrerSecret } from "./lib/log.js";
 import { connecter, deconnecter, ConfigurationManquante } from "./lib/firebase.js";
 import { listerAFaire } from "./lib/detect.js";
@@ -36,6 +36,8 @@ function lireConfig() {
   // Sécurité : toute valeur autre que false explicite = dry-run.
   if (cfg.dryRun !== false) cfg.dryRun = true;
   if (cfg.autoTermine !== true) cfg.autoTermine = false;
+  // Liste blanche absente ou invalide = aucune fiche autorisée.
+  if (!Array.isArray(cfg.allowedTestIds)) cfg.allowedTestIds = [];
   return cfg;
 }
 
@@ -87,12 +89,19 @@ async function traiterFiche(db, fiche, identite, controle) {
 // -------------------------------------------------------------
 async function main() {
   const config = lireConfig();
-  const { dryRun, autoTermine } = initGuard(config);
+  const { dryRun, autoTermine, allowedIds } = initGuard(config);
 
-  log.titre("ROBOT SEO — V1");
-  log.info(`Mode          : ${dryRun ? "DRY-RUN (aucune écriture)" : "ACTIF (écritures autorisées)"}`);
-  log.info(`autoTermine   : ${autoTermine ? "ACTIVÉ" : "désactivé"}`);
-  log.info(`Max par passage : ${config.maxFichesParPassage}`);
+  log.titre("ROBOT SEO — V1.1");
+  log.info(`Mode ............. ${dryRun ? "DRY-RUN (aucune écriture)" : "ACTIF (écritures autorisées)"}`);
+  log.info(`autoTermine ...... ${autoTermine ? "ACTIVÉ" : "désactivé"}`);
+  log.info(`Liste blanche .... ${allowedIds.length ? allowedIds.join(", ") : "VIDE — aucune écriture possible"}`);
+  log.info(`Max par passage .. ${config.maxFichesParPassage}`);
+
+  if (!dryRun && allowedIds.length === 0) {
+    log.erreur("Mode actif demandé mais allowedTestIds est vide : aucune fiche ne peut être écrite.");
+    log.info("Le robot s'arrête sans rien modifier.");
+    return 1;
+  }
 
   let session = null;
   let codeSortie = 0;
@@ -117,15 +126,18 @@ async function main() {
     }
 
     log.titre("VÉRIFICATION");
-    const bilan = { traitables: 0, bloquees: 0, collisions: 0, echecs: 0, pretes: 0 };
+    const bilan = { traitables: 0, bloquees: 0, horsListe: 0, collisions: 0, echecs: 0, pretes: 0 };
 
     for (const fiche of aTraiter) {
       // Toute valeur sensible de cette fiche est masquée dans la suite des logs.
       valeursSensiblesDe(fiche).forEach(enregistrerSecret);
 
       const resume = resumeAnonyme(fiche);
+      const dansListe = estAutorisee(fiche._cle);
+
       log.info("");
       log.etape(`Fiche ${resume.ref}`);
+      log.info(`   liste blanche ..... ${dansListe ? "OUI — écriture permise" : "non — fiche ignorée"}`);
       log.info(`   statut ............ ${resume.statut}`);
       log.info(`   activité .......... ${resume.activite}`);
       log.info(`   Carte G ........... ${resume.carteG}`);
@@ -156,6 +168,14 @@ async function main() {
       }
 
       // --- Mode actif uniquement ---
+
+      // Verrou n°2 : hors liste blanche, on ne touche à rien, même si la fiche est parfaite.
+      if (!dansListe) {
+        bilan.horsListe++;
+        log.ignore("   Hors liste blanche — aucune écriture, fiche laissée intacte.");
+        continue;
+      }
+
       const etatExistant = await lireEtat(db, fiche._cle);
       if (etatExistant && !verrouPerime(etatExistant, config.verrouPerimeMinutes * 60000)) {
         log.ignore("   Verrou encore actif, on passe.");
@@ -174,6 +194,7 @@ async function main() {
     log.info(`Traitables ............. ${bilan.traitables}`);
     log.info(`Bloquées ............... ${bilan.bloquees}`);
     if (!dryRun) {
+      log.info(`Hors liste blanche ..... ${bilan.horsListe}`);
       log.info(`Prêtes à valider ....... ${bilan.pretes}`);
       log.info(`Collisions ............. ${bilan.collisions}`);
       log.info(`Échecs ................. ${bilan.echecs}`);
@@ -191,6 +212,10 @@ async function main() {
     } else if (e instanceof DryRunViolation) {
       // Ne devrait jamais arriver : signalerait un chemin d'écriture non protégé.
       log.erreur("Tentative d'écriture en dry-run interceptée : " + e.message);
+      codeSortie = 1;
+    } else if (e instanceof FicheNonAutorisee) {
+      // Ne devrait jamais arriver : le filtrage a lieu en amont.
+      log.erreur("Tentative d'écriture hors liste blanche interceptée : " + e.message);
       codeSortie = 1;
     } else {
       log.erreur("Erreur inattendue : " + erreurLisible(e));

@@ -25,7 +25,7 @@ import { log } from "./log.js";
  * @returns {Promise<boolean>} true si le robot a obtenu la fiche
  */
 export async function reserver(db, cle, identite) {
-  assertWriteAllowed(`réservation de la fiche ${cle} (afaire → encours)`);
+  assertWriteAllowed(`réservation de la fiche ${cle} (afaire → encours)`, cle);
 
   const cible = ref(db, `seo/${cle}/statut`);
   const res = await runTransaction(cible, (statutActuel) => {
@@ -57,7 +57,7 @@ export async function reserver(db, cle, identite) {
  * Utilisé en cas d'échec, ou pour libérer un verrou périmé.
  */
 export async function liberer(db, cle, identite) {
-  assertWriteAllowed(`libération de la fiche ${cle} (encours → afaire)`);
+  assertWriteAllowed(`libération de la fiche ${cle} (encours → afaire)`, cle);
 
   const res = await runTransaction(ref(db, `seo/${cle}/statut`), (statutActuel) => {
     if (statutActuel !== STATUT_EN_COURS) return;
@@ -81,7 +81,7 @@ export async function liberer(db, cle, identite) {
  *    C'est volontaire : la validation finale reste humaine.
  */
 export async function marquerTermine(db, cle, identite) {
-  assertTermineAllowed();
+  assertTermineAllowed(cle);
 
   const res = await runTransaction(ref(db, `seo/${cle}/statut`), (statutActuel) => {
     if (statutActuel !== STATUT_EN_COURS) return;

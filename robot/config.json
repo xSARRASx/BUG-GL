@@ -1,8 +1,10 @@
 {
-  "_commentaire": "Configuration du Robot SEO. dryRun:true = AUCUNE ecriture Firebase, quelles que soient les autres options.",
+  "_commentaire": "Configuration du Robot SEO. Trois verrous independants : dryRun, allowedTestIds, autoTermine. Chacun est ferme par defaut.",
 
   "dryRun": true,
   "autoTermine": false,
+
+  "allowedTestIds": ["-P2atEDbwnjG7JWnxhH2"],
 
   "maxFichesParPassage": 5,
   "verrouPerimeMinutes": 30,
@@ -10,9 +12,10 @@
   "identiteParDefaut": "Robot SEO",
 
   "_notes": {
-    "dryRun": "Passer a false activera les ecritures. Ne le faire qu'apres validation complete des logs en dry-run.",
+    "dryRun": "true = AUCUNE ecriture Firebase, quelles que soient les autres options. Passer a false n'active le mode actif QUE pour les fiches listees dans allowedTestIds.",
+    "allowedTestIds": "Liste blanche stricte des cles Firebase que le robot a le droit d'ecrire. Une liste vide = aucune ecriture possible. Toute fiche absente de cette liste est ignoree, meme si elle est parfaitement traitable.",
     "autoTermine": "Doit rester false : le passage en statut 'termine' reste une decision humaine.",
-    "maxFichesParPassage": "Limite le nombre de fiches traitees par execution, pour maitriser la duree et le quota Spark.",
+    "maxFichesParPassage": "Limite le nombre de fiches examinees par execution, pour maitriser la duree et le quota Spark.",
     "verrouPerimeMinutes": "Au-dela de ce delai sans battement de coeur, un verrou est considere comme abandonne."
   }
 }

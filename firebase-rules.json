@@ -1,5 +1,20 @@
 {
+  "_ATTENTION": "Ce fichier documente les regles. Il n'est PAS deploye automatiquement : il faut les copier dans Firebase Console > Realtime Database > Regles, puis cliquer sur Publier.",
+  "_A_REMPLACER": "UID_MARTIN_A_REMPLACER et UID_CAMILLE_A_REMPLACER doivent etre remplaces par les vrais UID, visibles dans Firebase Console > Authentication > Users (colonne 'Identifiant utilisateur').",
+  "_UID_ROBOT": "GFMnGC8zdzYAzFrYKKLUvR096Dy2 = compte Robot SEO.",
+
   "rules": {
+    "seo": {
+      ".read": "auth != null && (auth.uid === 'UID_MARTIN_A_REMPLACER' || auth.uid === 'UID_CAMILLE_A_REMPLACER' || auth.uid === 'GFMnGC8zdzYAzFrYKKLUvR096Dy2')",
+      ".write": "auth != null && (auth.uid === 'UID_MARTIN_A_REMPLACER' || auth.uid === 'UID_CAMILLE_A_REMPLACER' || auth.uid === 'GFMnGC8zdzYAzFrYKKLUvR096Dy2')",
+      ".indexOn": ["statut"]
+    },
+
+    "seoRobot": {
+      ".read": "auth != null && auth.uid === 'GFMnGC8zdzYAzFrYKKLUvR096Dy2'",
+      ".write": "auth != null && auth.uid === 'GFMnGC8zdzYAzFrYKKLUvR096Dy2'"
+    },
+
     "bugs": {
       ".read": true,
       ".write": true
@@ -9,10 +24,6 @@
       ".write": true
     },
     "meta": {
-      ".read": true,
-      ".write": true
-    },
-    "seo": {
       ".read": true,
       ".write": true
     },

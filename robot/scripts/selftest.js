@@ -9,11 +9,16 @@
 // =============================================================
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { initGuard, assertWriteAllowed, assertTermineAllowed, DryRunViolation, AutoTermineDisabled } from "../lib/guard.js";
+const ICI = dirname(fileURLToPath(import.meta.url));
+
+import { initGuard, assertWriteAllowed, assertTermineAllowed, estAutorisee, getAllowedIds, DryRunViolation, AutoTermineDisabled, FicheNonAutorisee } from "../lib/guard.js";
 import { verifier } from "../lib/validate.js";
 import { resumeAnonyme, nettoyerTexte, valeursSensiblesDe, CHAMPS_SENSIBLES } from "../lib/redact.js";
-import { entete } from "../lib/report.js";
+import { entete, composerNote } from "../lib/note.js";
 
 let ok = 0;
 function test(nom, fn) {
@@ -61,27 +66,50 @@ const ficheValide = {
 
 console.log("\n=== GARDE-FOU DRY-RUN ===");
 
-initGuard({ dryRun: true, autoTermine: false });
+const ID_TEST = "-P2atEDbwnjG7JWnxhH2";
+const ID_AUTRE = "-P9autreFicheXyz0001";
 
-test("une écriture est refusée en dry-run", () => {
-  assert.throws(() => assertWriteAllowed("test"), DryRunViolation);
+initGuard({ dryRun: true, autoTermine: false, allowedTestIds: [ID_TEST] });
+
+test("une écriture est refusée en dry-run, même sur la fiche autorisée", () => {
+  assert.throws(() => assertWriteAllowed("test", ID_TEST), DryRunViolation);
+});
+
+test("le dry-run prime sur la liste blanche", () => {
+  // L'erreur doit être DryRunViolation, pas FicheNonAutorisee :
+  // le premier verrou se ferme avant le second.
+  assert.throws(() => assertWriteAllowed("test", ID_AUTRE), DryRunViolation);
 });
 
 test("le passage en terminé est refusé", () => {
-  assert.throws(() => assertTermineAllowed(), AutoTermineDisabled);
+  assert.throws(() => assertTermineAllowed(ID_TEST), AutoTermineDisabled);
 });
 
 test("le garde-fou ne peut pas être réinitialisé", () => {
   assert.throws(() => initGuard({ dryRun: false }), /déjà initialisé/);
 });
 
+test("la liste blanche est bien chargée", () => {
+  assert.deepEqual(getAllowedIds(), [ID_TEST]);
+});
+
+test("estAutorisee reconnaît uniquement la fiche listée", () => {
+  assert.equal(estAutorisee(ID_TEST), true);
+  assert.equal(estAutorisee(ID_AUTRE), false);
+  assert.equal(estAutorisee(""), false);
+  assert.equal(estAutorisee(null), false);
+  assert.equal(estAutorisee(undefined), false);
+});
+
 test("la configuration par défaut est le mode sûr", () => {
-  // dryRun absent ⇒ doit valoir true (vérifié via la normalisation d'index.js)
-  const cfg = { autoTermine: "oui" };
+  // Reproduit la normalisation de lireConfig() dans index.js
+  const cfg = { autoTermine: "oui", allowedTestIds: "pas-un-tableau" };
   const dryRun = cfg.dryRun !== false;
   const autoTermine = cfg.autoTermine === true;
+  const ids = Array.isArray(cfg.allowedTestIds) ? cfg.allowedTestIds : [];
   assert.equal(dryRun, true);
   assert.equal(autoTermine, false);
+  assert.deepEqual(ids, []);
 });
 
 console.log("\n=== VALIDATION DES CHAMPS ===");
@@ -179,20 +207,43 @@ test("l'en-tête est daté et identifiable", () => {
   assert.equal(h, "--- Compte rendu Robot SEO — 2026-09-27 ---");
 });
 
-test("la concaténation préserve la note existante", () => {
-  // Reproduit la logique de la transaction de report.js
+test("la concaténation préserve intégralement la note existante", () => {
   const existant = "Note existante de Camille.";
-  const bloc = entete(new Date("2026-09-27T10:00:00Z")) + "\nRapport du robot.";
-  const resultat = `${existant.trimEnd()}\n\n${bloc}`;
-  assert.ok(resultat.startsWith(existant));
-  assert.ok(resultat.includes("Rapport du robot."));
+  const r = composerNote(existant, "Rapport du robot.", new Date("2026-09-27T10:00:00Z"));
+  assert.ok(r.startsWith(existant), "la note de Camille doit rester en tête");
+  assert.ok(r.includes("Rapport du robot."));
+  assert.ok(r.includes("--- Compte rendu Robot SEO — 2026-09-27 ---"));
 });
 
 test("une note vide ne produit pas de saut de ligne parasite", () => {
-  const existant = "";
-  const bloc = entete(new Date("2026-09-27T10:00:00Z")) + "\nRapport.";
-  const resultat = existant.trim() === "" ? bloc : `${existant}\n\n${bloc}`;
-  assert.ok(resultat.startsWith("--- Compte rendu"));
+  const r = composerNote("", "Rapport.", new Date("2026-09-27T10:00:00Z"));
+  assert.ok(r.startsWith("--- Compte rendu"));
+  assert.ok(!r.startsWith("\n"));
+});
+
+test("une note null ou absente est gérée", () => {
+  assert.ok(composerNote(null, "R.").startsWith("--- Compte rendu"));
+  assert.ok(composerNote(undefined, "R.").startsWith("--- Compte rendu"));
+});
+
+test("deux comptes rendus successifs s'empilent sans perte", () => {
+  const un = composerNote("Note de Camille.", "Premier rapport.", new Date("2026-09-27T10:00:00Z"));
+  const deux = composerNote(un, "Second rapport.", new Date("2026-09-28T10:00:00Z"));
+  assert.ok(deux.includes("Note de Camille."));
+  assert.ok(deux.includes("Premier rapport."));
+  assert.ok(deux.includes("Second rapport."));
+});
+
+console.log("\n=== MODE ACTIF (processus séparés) ===");
+
+test("mode actif : seule la fiche listée est écrivable, terminé toujours refusé", () => {
+  const sortie = execFileSync(process.execPath, [resolve(ICI, "scenarios/actif-liste-blanche.js")], { encoding: "utf8" });
+  assert.match(sortie, /SCENARIO_OK/);
+});
+
+test("mode actif + liste vide : aucune écriture possible", () => {
+  const sortie = execFileSync(process.execPath, [resolve(ICI, "scenarios/actif-liste-vide.js")], { encoding: "utf8" });
+  assert.match(sortie, /SCENARIO_OK/);
 });
 
 console.log(`\n${ok} test(s) réussi(s).${process.exitCode ? " ⚠️ Des tests ont échoué." : " Tout est vert."}\n`);
