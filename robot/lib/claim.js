@@ -1,77 +1,57 @@
 // =============================================================
-//  Verrouillage atomique d'une fiche (anti-collision avec Camille)
+//  Transitions de statut du robot (anti-collision avec Camille)
 // =============================================================
-//  La transaction porte sur /seo/{cle}/statut uniquement — et non
-//  sur la fiche entière — pour deux raisons :
-//    • l'atomicité ne concerne que le statut : c'est lui qui décide
-//      qui « prend » la fiche ;
-//    • une transaction sur la fiche entière re-téléchargerait puis
-//      ré-enverrait les pièces jointes base64 à chaque tentative.
+//  Les transitions passent par des requêtes REST conditionnelles
+//  (ETag / If-Match), et NON par runTransaction() : voir l'en-tête de
+//  lib/rest.js pour le détail du problème de cache constaté lors du
+//  test actif #8.
 //
 //  Ce module ne fournit que des PRIMITIVES. L'enchaînement et les
 //  filets de sécurité vivent dans lib/flow.js, qui est pur et donc
-//  testable hors ligne (y compris ses échecs partiels).
+//  testable hors ligne.
 //
-//  ⚠️ INACTIF EN DRY-RUN et hors liste blanche.
+//  ⚠️ INACTIF EN DRY-RUN et hors liste blanche : assertWriteAllowed()
+//  lève avant toute requête.
 // =============================================================
 
-import { ref, runTransaction, update, get } from "firebase/database";
+import { ref, update } from "firebase/database";
 import { assertWriteAllowed, assertTermineAllowed } from "./guard.js";
 import { STATUT_A_FAIRE, STATUT_EN_COURS, STATUT_TERMINE } from "./statuts.js";
-import { decisionClaim, decisionLiberation } from "./flow.js";
+import { RAISONS } from "./rest.js";
 
 /**
  * Réserve une fiche : « afaire » → « encours ».
  *
- * ⚠️ POURQUOI UNE PRÉ-LECTURE AVANT LA TRANSACTION
- * Firebase peut appeler le callback d'une transaction avec `null`
- * alors que la donnée existe sur le serveur, simplement parce que le
- * cache local n'est pas encore rempli — ce qui est systématiquement
- * le cas au tout premier accès d'un processus court comme le nôtre.
- * Le callback avortait alors la transaction, et le robot concluait à
- * tort « déjà prise par quelqu'un d'autre » : une FAUSSE collision.
+ * Refus sans aucune écriture si le GET voit « encours », « termine »
+ * ou rien du tout.
  *
- * Le `get()` préalable remplit le cache local, si bien que le callback
- * reçoit la vraie valeur dès son premier appel. La transaction reste
- * indispensable : elle garantit qu'un changement survenu entre le
- * `get()` et le commit fait échouer le claim proprement.
- *
- * @returns {Promise<{pris: boolean, raison: string, statutLu?: *, statutApres?: *}>}
- *   raison : "pris" | "occupee" | "course" | "disparue"
+ * @returns {Promise<{pris: boolean, raison: string, statutLu?: *, http?: number}>}
+ *   raison : "pris" | "occupee" | "course" | "disparue" | "autorisation" | "reseau" | "http"
  */
-export async function claimStatut(db, cle) {
+export async function claimStatut(rest, cle) {
   assertWriteAllowed(`réservation de la fiche ${cle} (afaire → encours)`, cle);
 
-  const cible = ref(db, `seo/${cle}/statut`);
+  const res = await rest.changerStatutConditionnel(cle, STATUT_A_FAIRE, STATUT_EN_COURS);
 
-  // --- 1. Pré-lecture directe (remplit aussi le cache local) ---
-  const snap = await get(cible);
-  const statutLu = snap.exists() ? snap.val() : null;
+  if (res.ok) return { pris: true, raison: "pris", statutLu: res.statutLu };
 
-  if (statutLu === null) {
-    // Fiche ou champ absent : on ne crée jamais la donnée.
-    return { pris: false, raison: "disparue", statutLu: null };
+  switch (res.raison) {
+    case RAISONS.COURSE:
+      // 412 : la fiche a changé entre le GET et le PUT. Vraie course.
+      return { pris: false, raison: "course", statutLu: res.statutLu, http: res.http };
+    case RAISONS.SOURCE_DIFFERENTE:
+      return { pris: false, raison: "occupee", statutLu: res.statutLu };
+    case RAISONS.ABSENT:
+      return { pris: false, raison: "disparue", statutLu: null };
+    default:
+      // autorisation, réseau, etag absent, http : erreurs, pas des collisions.
+      return { pris: false, raison: res.raison, statutLu: res.statutLu, http: res.http };
   }
-  if (statutLu !== STATUT_A_FAIRE) {
-    // Vraie occupation, constatée avant toute tentative d'écriture.
-    return { pris: false, raison: "occupee", statutLu };
-  }
-
-  // --- 2. Transaction atomique, pour le cas d'un changement concurrent ---
-  const res = await runTransaction(cible, decisionClaim);
-
-  if (res.committed) return { pris: true, raison: "pris", statutLu };
-
-  // Le pré-read voyait « afaire » mais le commit a échoué : quelqu'un
-  // est passé entre les deux. Cas distinct d'une fiche déjà occupée.
-  const statutApres = res.snapshot && res.snapshot.exists() ? res.snapshot.val() : null;
-  return { pris: false, raison: "course", statutLu, statutApres };
 }
 
 /**
  * Métadonnées écrites juste après un claim réussi.
- * Reproduit exactement la logique de l'app (js/seo.js) pour ne pas
- * fausser le calcul des revenus.
+ * Écriture simple (pas de condition) : l'atomicité portait sur le statut.
  */
 export async function ecrireMetaReservation(db, cle, identite) {
   assertWriteAllowed(`métadonnées de réservation de la fiche ${cle}`, cle);
@@ -83,40 +63,30 @@ export async function ecrireMetaReservation(db, cle, identite) {
 }
 
 /**
- * Repli d'urgence : « encours » → « afaire ».
- * N'écrit aucune métadonnée, pour maximiser ses chances d'aboutir
- * quand une écriture vient déjà d'échouer.
+ * Repli d'urgence : « encours » → « afaire », statut seul.
  *
- * Même pré-lecture que claimStatut, pour la même raison : sans elle,
- * un cache local vide ferait avorter la transaction et le robot
- * annoncerait à tort une libération non confirmée.
+ * Une fiche déjà en « afaire » compte comme un succès : l'objectif est
+ * atteint. En revanche, un statut absent ou « termine » est un refus :
+ * on ne peut pas confirmer la libération, et on ne touche jamais à une
+ * fiche terminée.
  *
  * @returns {Promise<boolean>} true si la fiche est bien en « afaire » à l'arrivée
  */
-export async function remettreAFaire(db, cle) {
+export async function remettreAFaire(rest, cle) {
   assertWriteAllowed(`repli de la fiche ${cle} (encours → afaire)`, cle);
 
-  const cible = ref(db, `seo/${cle}/statut`);
+  const res = await rest.changerStatutConditionnel(cle, STATUT_EN_COURS, STATUT_A_FAIRE, {
+    dejaCibleEstSucces: true,
+  });
 
-  const snap = await get(cible);
-  const statutLu = snap.exists() ? snap.val() : null;
-
-  // Objectif déjà atteint : la fiche est rendue. Ce n'est pas une erreur.
-  if (statutLu === STATUT_A_FAIRE) return true;
-
-  // Champ absent, ou fiche passée en « terminé » : on ne touche à rien
-  // et on ne peut pas confirmer la libération.
-  if (statutLu !== STATUT_EN_COURS) return false;
-
-  const res = await runTransaction(cible, decisionLiberation);
-  return res.committed === true;
+  return res.ok === true;
 }
 
 /**
  * Libération normale : « encours » → « afaire » + métadonnées.
  */
-export async function liberer(db, cle, identite) {
-  const rendue = await remettreAFaire(db, cle);
+export async function liberer(db, rest, cle, identite) {
+  const rendue = await remettreAFaire(rest, cle);
   if (!rendue) return false;
 
   assertWriteAllowed(`métadonnées de libération de la fiche ${cle}`, cle);
@@ -131,33 +101,19 @@ export async function liberer(db, cle, identite) {
 /**
  * Passage en « terminé ».
  * 🔒 Refusé tant que autoTermine vaut false dans robot/config.json.
- *    C'est volontaire : la validation finale reste humaine.
  *    Ce chemin n'est JAMAIS emprunté par lib/flow.js.
  */
-export async function marquerTermine(db, cle, identite) {
+export async function marquerTermine(db, rest, cle, identite) {
   assertTermineAllowed(cle);
 
-  const cible = ref(db, `seo/${cle}/statut`);
+  const res = await rest.changerStatutConditionnel(cle, STATUT_EN_COURS, STATUT_TERMINE);
+  if (!res.ok) return false;
 
-  // Même pré-lecture que claimStatut : sans elle, un cache local vide
-  // ferait avorter la transaction et signalerait un faux échec.
-  const snap = await get(cible);
-  const statutLu = snap.exists() ? snap.val() : null;
-  if (statutLu !== STATUT_EN_COURS) return false;
-
-  const res = await runTransaction(cible, (statutActuel) => {
-    if (statutActuel === null || statutActuel === undefined) return;
-    if (statutActuel !== STATUT_EN_COURS) return;
-    return STATUT_TERMINE;
+  const maintenant = Date.now();
+  await update(ref(db, `seo/${cle}`), {
+    termineAt: maintenant,   // pilote le calcul des revenus — ne jamais réécrire ensuite
+    updatedAt: maintenant,
+    updatedBy: identite,
   });
-
-  if (res.committed) {
-    const maintenant = Date.now();
-    await update(ref(db, `seo/${cle}`), {
-      termineAt: maintenant,   // pilote le calcul des revenus — ne jamais réécrire ensuite
-      updatedAt: maintenant,
-      updatedBy: identite,
-    });
-  }
-  return res.committed;
+  return true;
 }

@@ -116,7 +116,24 @@ export async function connecter() {
   const identite = user.displayName || "Robot SEO";
   log.ok(`Connecté — uid ${user.uid}`);
 
-  return { app, db, auth, user, identite };
+  // ID token pour les requêtes REST conditionnelles (ETag / If-Match).
+  // Il est enregistré comme secret à chaque obtention : le SDK le
+  // renouvelle tout seul, et aucune de ses versions ne doit fuiter.
+  const getIdToken = async () => {
+    const jeton = await user.getIdToken();
+    enregistrerSecret(jeton);
+    return jeton;
+  };
+
+  // On en récupère un tout de suite : si les droits sont mauvais,
+  // autant le savoir avant de commencer.
+  await getIdToken();
+
+  return {
+    app, db, auth, user, identite,
+    getIdToken,
+    databaseURL: config.databaseURL,
+  };
 }
 
 export async function deconnecter(auth) {

@@ -10,6 +10,17 @@
 //  La logique de composition du texte vit dans lib/note.js, sans
 //  aucune dépendance, ce qui la rend testable hors ligne.
 //
+//  🚨 DETTE CONNUE — À CORRIGER AVANT DE BRANCHER L'ANALYSE
+//  Cette transaction souffre du MÊME défaut que celles qui ont été
+//  retirées de claim.js : dans un processus Node court, le callback
+//  reçoit `null`, la transaction est avortée et n'est jamais rejouée.
+//  Le compte rendu ne serait donc pas écrit.
+//
+//  Ce chemin est aujourd'hui INATTEIGNABLE — analyse.js est un stub,
+//  donc ajouterRapport() n'est jamais appelé. Il faudra le porter sur
+//  une requête REST conditionnelle (voir lib/rest.js) au moment de
+//  brancher une vraie analyse.
+//
 //  ⚠️ INACTIF EN DRY-RUN et hors liste blanche.
 // =============================================================
 

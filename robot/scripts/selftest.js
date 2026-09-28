@@ -20,7 +20,9 @@ import { verifier } from "../lib/validate.js";
 import { resumeAnonyme, nettoyerTexte, valeursSensiblesDe, CHAMPS_SENSIBLES } from "../lib/redact.js";
 import { entete, composerNote } from "../lib/note.js";
 import { traiterAvecFilet, reserverAvecFilet, libererAvecRepli, rollbackConfirme,
-         decisionClaim, decisionLiberation, normaliserClaim, ISSUES, MOTIFS } from "../lib/flow.js";
+         normaliserClaim, ISSUES, MOTIFS } from "../lib/flow.js";
+import { creerClientRest, RAISONS } from "../lib/rest.js";
+import { creerFauxFetch, TOKEN_FACTICE } from "./fauxfetch.js";
 import { creerFauxOps } from "./fauxops.js";
 
 const CLE = "-P2atEDbwnjG7JWnxhH2";
@@ -477,29 +479,7 @@ await testAsync("analyse indisponible + libération non confirmée : res.libere 
 });
 
 
-console.log("\n=== CLAIM : LE `null` DU CACHE LOCAL ===");
-console.log("    (cause de la fausse collision du premier test actif)");
-
-await testAsync("decisionClaim n'autorise JAMAIS le passage en encours depuis null", () => {
-  assert.equal(decisionClaim(null), undefined, "null ne doit jamais créer la donnée");
-  assert.equal(decisionClaim(undefined), undefined);
-});
-
-await testAsync("decisionClaim n'accepte que « afaire »", () => {
-  assert.equal(decisionClaim("afaire"), "encours");
-  assert.equal(decisionClaim("encours"), undefined);
-  assert.equal(decisionClaim("termine"), undefined);
-  assert.equal(decisionClaim(""), undefined);
-  assert.equal(decisionClaim(0), undefined);
-});
-
-await testAsync("decisionLiberation n'écrit jamais depuis null", () => {
-  assert.equal(decisionLiberation(null), undefined);
-  assert.equal(decisionLiberation(undefined), undefined);
-  assert.equal(decisionLiberation("encours"), "afaire");
-  assert.equal(decisionLiberation("afaire"), undefined);
-  assert.equal(decisionLiberation("termine"), undefined);
-});
+console.log("\n=== CLAIM : MOTIFS DE REFUS ===");
 
 await testAsync("normaliserClaim accepte l'objet détaillé et le booléen hérité", () => {
   assert.equal(normaliserClaim(true).pris, true);
@@ -541,6 +521,171 @@ await testAsync("claim nominal : pré-read afaire puis commit", async () => {
   const r = await reserverAvecFilet(ops, CLE, "Robot SEO");
   assert.equal(r.obtenue, true);
   assert.equal(etat.statut, "encours");
+});
+
+
+
+await testAsync("erreur d'autorisation : classée en ÉCHEC, jamais en collision", async () => {
+  const { ops, etat } = creerFauxOps({ retoursFalse: { claimAutorisation: true } });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.ECHEC_RESERVATION,
+    "un refus de droits ne doit pas être banalisé en collision");
+  assert.equal(r.motif, MOTIFS.ERREUR_TECHNIQUE);
+  assert.equal(r.detail.claim.http, 403);
+  assert.equal(etat.statut, "afaire", "rien ne doit avoir été écrit");
+});
+
+await testAsync("erreur réseau au claim : classée en ÉCHEC, jamais en collision", async () => {
+  const { ops, etat } = creerFauxOps({ retoursFalse: { claimReseau: true } });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.ECHEC_RESERVATION);
+  assert.equal(r.motif, MOTIFS.ERREUR_TECHNIQUE);
+  assert.equal(etat.statut, "afaire");
+  assert.equal(etat.seoRobot, null, "le traitement ne doit pas démarrer");
+});
+
+console.log("\n=== REST CONDITIONNEL (ETag / If-Match) ===");
+console.log("    (remplace runTransaction pour les transitions de statut)");
+
+const BASE = "https://exemple-test.invalid";
+const clientAvec = (scenario) => {
+  const faux = creerFauxFetch(scenario);
+  return {
+    rest: creerClientRest({ databaseURL: BASE, getIdToken: faux.getIdToken, fetchImpl: faux.fetchImpl }),
+    faux,
+  };
+};
+
+await testAsync("200 : transition confirmée, PUT conditionné par If-Match", async () => {
+  const { rest, faux } = clientAvec({ statut: "afaire", etag: 'W/"e1"' });
+  const r = await rest.changerStatutConditionnel(CLE, "afaire", "encours");
+  assert.equal(r.ok, true);
+  assert.equal(r.raison, RAISONS.CONFIRME);
+
+  const put = faux.requetes.find((q) => q.methode === "PUT");
+  assert.ok(put, "un PUT doit avoir été envoyé");
+  assert.equal(put.headers["If-Match"], 'W/"e1"', "le PUT doit porter l'ETag reçu");
+  assert.equal(put.body, JSON.stringify("encours"));
+
+  const get = faux.requetes.find((q) => q.methode === "GET");
+  assert.equal(get.headers["X-Firebase-ETag"], "true", "le GET doit demander l'ETag");
+});
+
+await testAsync("412 : course concurrente confirmée, aucune écriture retenue", async () => {
+  const { rest } = clientAvec({ statut: "afaire", putStatus: 412 });
+  const r = await rest.changerStatutConditionnel(CLE, "afaire", "encours");
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, RAISONS.COURSE);
+  assert.equal(r.http, 412);
+});
+
+await testAsync("valeur source différente : refus sans aucun PUT", async () => {
+  const { rest, faux } = clientAvec({ statut: "encours" });
+  const r = await rest.changerStatutConditionnel(CLE, "afaire", "encours");
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, RAISONS.SOURCE_DIFFERENTE);
+  assert.equal(r.statutLu, "encours");
+  assert.ok(!faux.requetes.some((q) => q.methode === "PUT"), "aucun PUT ne doit partir");
+});
+
+await testAsync("statut absent : refus, la donnée n'est jamais créée", async () => {
+  const { rest, faux } = clientAvec({ statut: null });
+  const r = await rest.changerStatutConditionnel(CLE, "afaire", "encours");
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, RAISONS.ABSENT);
+  assert.ok(!faux.requetes.some((q) => q.methode === "PUT"));
+});
+
+await testAsync("401 au GET : erreur d'autorisation, pas une collision", async () => {
+  const { rest, faux } = clientAvec({ getStatus: 401 });
+  const r = await rest.changerStatutConditionnel(CLE, "afaire", "encours");
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, RAISONS.AUTORISATION);
+  assert.equal(r.http, 401);
+  assert.ok(!faux.requetes.some((q) => q.methode === "PUT"));
+});
+
+await testAsync("403 au PUT : erreur d'autorisation", async () => {
+  const { rest } = clientAvec({ statut: "afaire", putStatus: 403 });
+  const r = await rest.changerStatutConditionnel(CLE, "afaire", "encours");
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, RAISONS.AUTORISATION);
+  assert.equal(r.http, 403);
+});
+
+await testAsync("erreur réseau au GET : échec, jamais un succès", async () => {
+  const { rest, faux } = clientAvec({ getJette: true });
+  const r = await rest.changerStatutConditionnel(CLE, "afaire", "encours");
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, RAISONS.RESEAU);
+  assert.ok(!faux.requetes.some((q) => q.methode === "PUT"));
+});
+
+await testAsync("erreur réseau au PUT : échec", async () => {
+  const { rest } = clientAvec({ statut: "afaire", putJette: true });
+  const r = await rest.changerStatutConditionnel(CLE, "afaire", "encours");
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, RAISONS.RESEAU);
+});
+
+await testAsync("code HTTP inattendu : traité comme un échec, jamais un succès", async () => {
+  for (const code of [500, 503, 404, 204, 301]) {
+    const { rest } = clientAvec({ statut: "afaire", putStatus: code });
+    const r = await rest.changerStatutConditionnel(CLE, "afaire", "encours");
+    assert.equal(r.ok, false, `HTTP ${code} ne doit jamais être un succès`);
+  }
+});
+
+await testAsync("ETag absent : refus, plutôt qu'une écriture non atomique", async () => {
+  const { rest, faux } = clientAvec({ statut: "afaire", sansEtag: true });
+  const r = await rest.changerStatutConditionnel(CLE, "afaire", "encours");
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, RAISONS.ETAG_ABSENT);
+  assert.ok(!faux.requetes.some((q) => q.methode === "PUT"));
+});
+
+await testAsync("libération : déjà « afaire » → succès immédiat, aucun PUT", async () => {
+  const { rest, faux } = clientAvec({ statut: "afaire" });
+  const r = await rest.changerStatutConditionnel(CLE, "encours", "afaire", { dejaCibleEstSucces: true });
+  assert.equal(r.ok, true);
+  assert.equal(r.raison, RAISONS.DEJA_CIBLE);
+  assert.ok(!faux.requetes.some((q) => q.methode === "PUT"), "objectif déjà atteint : rien à écrire");
+});
+
+await testAsync("libération : « encours » → PUT conditionnel confirmé", async () => {
+  const { rest, faux } = clientAvec({ statut: "encours" });
+  const r = await rest.changerStatutConditionnel(CLE, "encours", "afaire", { dejaCibleEstSucces: true });
+  assert.equal(r.ok, true);
+  assert.equal(r.raison, RAISONS.CONFIRME);
+  const put = faux.requetes.find((q) => q.methode === "PUT");
+  assert.equal(put.body, JSON.stringify("afaire"));
+});
+
+await testAsync("libération : « termine » → refus, on ne touche pas une fiche terminée", async () => {
+  const { rest, faux } = clientAvec({ statut: "termine" });
+  const r = await rest.changerStatutConditionnel(CLE, "encours", "afaire", { dejaCibleEstSucces: true });
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, RAISONS.SOURCE_DIFFERENTE);
+  assert.ok(!faux.requetes.some((q) => q.methode === "PUT"));
+});
+
+await testAsync("transitionConfirmee() n'accepte que ok:true", async () => {
+  const { transitionConfirmee } = await import("../lib/rest.js");
+  assert.equal(transitionConfirmee({ ok: true }), true);
+  assert.equal(transitionConfirmee({ ok: false, raison: "course" }), false);
+  assert.equal(transitionConfirmee(null), false);
+  assert.equal(transitionConfirmee(undefined), false);
+});
+
+await testAsync("l'ID token ne sort jamais du client (masqué par le journal)", async () => {
+  const { rest, faux } = clientAvec({ statut: "afaire" });
+  await rest.changerStatutConditionnel(CLE, "afaire", "encours");
+  // Le token est bien dans l'URL (l'API REST l'exige), mais aucune
+  // URL n'est journalisée, et nettoyerTexte() les masque de toute façon.
+  const urls = faux.requetes.map((q) => q.url).join(" ");
+  assert.ok(urls.includes(TOKEN_FACTICE), "le token doit bien être transmis à Firebase");
+  assert.ok(!nettoyerTexte(urls, [TOKEN_FACTICE]).includes(TOKEN_FACTICE),
+    "toute journalisation doit le masquer");
 });
 
 console.log(`\n${ok} test(s) réussi(s).${process.exitCode ? " ⚠️ Des tests ont échoué." : " Tout est vert."}\n`);

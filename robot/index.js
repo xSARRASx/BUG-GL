@@ -28,6 +28,7 @@ import { claimStatut, ecrireMetaReservation, remettreAFaire, liberer } from "./l
 import { demarrer, avancer, echouer, lireEtat, verrouPerime } from "./lib/state.js";
 import { ajouterRapport } from "./lib/report.js";
 import { traiterAvecFilet, libererAvecRepli, ISSUES, MOTIFS } from "./lib/flow.js";
+import { creerClientRest } from "./lib/rest.js";
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 
@@ -47,11 +48,11 @@ function lireConfig() {
 //  Les deux dernières sont « best effort » : elles ne lèvent jamais,
 //  car ce sont elles qui protègent la fiche d'un blocage.
 // -------------------------------------------------------------
-function creerOperations(db) {
+function creerOperations(db, rest) {
   return {
-    claimStatut: (cle) => claimStatut(db, cle),
+    claimStatut: (cle) => claimStatut(rest, cle),
     ecrireMetaReservation: (cle, identite) => ecrireMetaReservation(db, cle, identite),
-    remettreAFaire: (cle) => remettreAFaire(db, cle),
+    remettreAFaire: (cle) => remettreAFaire(rest, cle),
 
     demarrerEtat: (cle, identite) => demarrer(db, cle, identite),
     avancerEtat: (cle, etat) => avancer(db, cle, etat),
@@ -73,8 +74,8 @@ function creerOperations(db) {
     libererSurement: (cle, identite) =>
       libererAvecRepli(
         {
-          liberer: (c, id) => liberer(db, c, id),
-          remettreAFaire: (c) => remettreAFaire(db, c),
+          liberer: (c, id) => liberer(db, rest, c, id),
+          remettreAFaire: (c) => remettreAFaire(rest, c),
         },
         cle,
         identite,
@@ -91,9 +92,9 @@ function creerOperations(db) {
 // -------------------------------------------------------------
 //  Traitement d'une fiche (mode actif — inerte en dry-run)
 // -------------------------------------------------------------
-async function traiterFiche(db, fiche, identite, controle) {
+async function traiterFiche(db, rest, fiche, identite, controle) {
   const cle = fiche._cle;
-  const ops = creerOperations(db);
+  const ops = creerOperations(db, rest);
 
   const res = await traiterAvecFilet(ops, cle, identite, controle.contexte);
 
@@ -112,6 +113,18 @@ async function traiterFiche(db, fiche, identite, controle) {
 
     case ISSUES.ECHEC_RESERVATION: {
       const motif = res.detail && res.detail.motif;
+      const claim = (res.detail && res.detail.claim) || {};
+      if (motif === MOTIFS.ERREUR_TECHNIQUE) {
+        if (claim.raison === "autorisation") {
+          log.erreur(`   ⛔ Fiche ${cle} : accès refusé par Firebase (HTTP ${claim.http}).`);
+          log.erreur("      Vérifie les règles /seo et l'UID du compte robot.");
+        } else if (claim.raison === "reseau") {
+          log.erreur(`   ⛔ Fiche ${cle} : requête réseau en échec — aucune écriture tentée.`);
+        } else {
+          log.erreur(`   ⛔ Fiche ${cle} : réponse inattendue (${claim.raison}${claim.http ? ", HTTP " + claim.http : ""}) — traitée comme un échec.`);
+        }
+        return "echec";
+      }
       if (motif === MOTIFS.ROLLBACK_OK) {
         log.alerte(`   Fiche ${cle} : métadonnées en échec, fiche remise en « afaire » (confirmé).`);
       } else if (motif === MOTIFS.ROLLBACK_NON_CONFIRME) {
@@ -170,8 +183,12 @@ async function main() {
 
   try {
     session = await connecter();
-    const { db, identite: identiteCompte, auth } = session;
+    const { db, identite: identiteCompte, auth, getIdToken, databaseURL } = session;
     const identite = identiteCompte || config.identiteParDefaut;
+
+    // Les transitions de statut passent par des requêtes REST
+    // conditionnelles (ETag / If-Match), pas par runTransaction().
+    const rest = creerClientRest({ databaseURL, getIdToken });
 
     log.titre("DÉTECTION");
     const fiches = await listerAFaire(db);
@@ -245,7 +262,7 @@ async function main() {
         continue;
       }
 
-      const issue = await traiterFiche(db, fiche, identite, controle);
+      const issue = await traiterFiche(db, rest, fiche, identite, controle);
       if (issue === "collision") bilan.collisions++;
       else if (issue === "pret_a_valider") bilan.pretes++;
       else if (issue === "analyse_indisponible") bilan.analyseIndispo++;

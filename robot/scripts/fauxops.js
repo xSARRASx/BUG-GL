@@ -72,6 +72,12 @@ export function creerFauxOps(options = {}) {
       const statutLu = etat.statut === undefined ? null : etat.statut;
       if (statutLu === null) return { pris: false, raison: "disparue", statutLu: null };
       if (statutLu !== "afaire") return { pris: false, raison: "occupee", statutLu };
+      if (retoursFalse.claimAutorisation) {
+        return { pris: false, raison: "autorisation", statutLu, http: 403 };
+      }
+      if (retoursFalse.claimReseau) {
+        return { pris: false, raison: "reseau", statutLu };
+      }
       if (retoursFalse.claimTransaction) {
         // Le pre-read voyait afaire mais le commit echoue : course.
         return { pris: false, raison: "course", statutLu, statutApres: etat.statut };
