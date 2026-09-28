@@ -19,7 +19,8 @@ import { initGuard, assertWriteAllowed, assertTermineAllowed, estAutorisee, getA
 import { verifier } from "../lib/validate.js";
 import { resumeAnonyme, nettoyerTexte, valeursSensiblesDe, CHAMPS_SENSIBLES } from "../lib/redact.js";
 import { entete, composerNote } from "../lib/note.js";
-import { traiterAvecFilet, reserverAvecFilet, libererAvecRepli, rollbackConfirme, ISSUES, MOTIFS } from "../lib/flow.js";
+import { traiterAvecFilet, reserverAvecFilet, libererAvecRepli, rollbackConfirme,
+         decisionClaim, decisionLiberation, normaliserClaim, ISSUES, MOTIFS } from "../lib/flow.js";
 import { creerFauxOps } from "./fauxops.js";
 
 const CLE = "-P2atEDbwnjG7JWnxhH2";
@@ -472,6 +473,73 @@ await testAsync("analyse indisponible + libération non confirmée : res.libere 
   const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
   assert.equal(r.issue, ISSUES.ANALYSE_INDISPONIBLE);
   assert.equal(r.libere, false, "ne pas annoncer « fiche rendue » sans confirmation");
+  assert.equal(etat.statut, "encours");
+});
+
+
+console.log("\n=== CLAIM : LE `null` DU CACHE LOCAL ===");
+console.log("    (cause de la fausse collision du premier test actif)");
+
+await testAsync("decisionClaim n'autorise JAMAIS le passage en encours depuis null", () => {
+  assert.equal(decisionClaim(null), undefined, "null ne doit jamais créer la donnée");
+  assert.equal(decisionClaim(undefined), undefined);
+});
+
+await testAsync("decisionClaim n'accepte que « afaire »", () => {
+  assert.equal(decisionClaim("afaire"), "encours");
+  assert.equal(decisionClaim("encours"), undefined);
+  assert.equal(decisionClaim("termine"), undefined);
+  assert.equal(decisionClaim(""), undefined);
+  assert.equal(decisionClaim(0), undefined);
+});
+
+await testAsync("decisionLiberation n'écrit jamais depuis null", () => {
+  assert.equal(decisionLiberation(null), undefined);
+  assert.equal(decisionLiberation(undefined), undefined);
+  assert.equal(decisionLiberation("encours"), "afaire");
+  assert.equal(decisionLiberation("afaire"), undefined);
+  assert.equal(decisionLiberation("termine"), undefined);
+});
+
+await testAsync("normaliserClaim accepte l'objet détaillé et le booléen hérité", () => {
+  assert.equal(normaliserClaim(true).pris, true);
+  assert.equal(normaliserClaim(false).pris, false);
+  assert.equal(normaliserClaim(undefined).pris, false);
+  assert.equal(normaliserClaim({ pris: true, raison: "pris" }).pris, true);
+  assert.equal(normaliserClaim({ pris: false, raison: "course" }).raison, "course");
+});
+
+await testAsync("fiche occupée au pré-read → collision simple", async () => {
+  const { ops, etat } = creerFauxOps({ statutInitial: "encours" });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.COLLISION);
+  assert.equal(r.motif, MOTIFS.COLLISION);
+  assert.equal(r.detail.claim.statutLu, "encours");
+  assert.equal(etat.seoRobot, null);
+});
+
+await testAsync("course entre le pré-read et le commit → motif distinct", async () => {
+  const { ops, etat } = creerFauxOps({ retoursFalse: { claimTransaction: true } });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.COLLISION);
+  assert.equal(r.motif, MOTIFS.COLLISION_CONCURRENTE,
+    "une course doit être distinguée d'une fiche déjà occupée");
+  assert.equal(etat.statut, "afaire", "rien ne doit avoir été écrit");
+  assert.equal(etat.seoRobot, null);
+});
+
+await testAsync("statut absent côté serveur → refus, aucune écriture", async () => {
+  const { ops, etat } = creerFauxOps({ statutInitial: null });
+  const r = await traiterAvecFilet(ops, CLE, "Robot SEO", {});
+  assert.equal(r.issue, ISSUES.COLLISION);
+  assert.equal(r.motif, MOTIFS.FICHE_DISPARUE);
+  assert.equal(etat.statut, null, "la donnée ne doit surtout pas être créée");
+});
+
+await testAsync("claim nominal : pré-read afaire puis commit", async () => {
+  const { ops, etat } = creerFauxOps();
+  const r = await reserverAvecFilet(ops, CLE, "Robot SEO");
+  assert.equal(r.obtenue, true);
   assert.equal(etat.statut, "encours");
 });
 

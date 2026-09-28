@@ -23,6 +23,55 @@
 //  Le statut « termine » n'est jamais écrit ici.
 // =============================================================
 
+import { STATUT_A_FAIRE, STATUT_EN_COURS } from "./statuts.js";
+
+/**
+ * Décision appliquée DANS la transaction de claim.
+ *
+ * ⚠️ Firebase peut appeler le callback d'une transaction avec `null`
+ * alors que la donnée existe bien sur le serveur : le cache local
+ * n'est pas encore rempli. Deux pièges à éviter :
+ *
+ *   • renvoyer une valeur sur ce `null` → on CRÉERAIT la donnée à
+ *     partir de rien, ce qui ferait passer en « encours » une fiche
+ *     dont on ignore l'état réel. Interdit.
+ *   • avorter sans précaution → Firebase ne rappelle pas le callback
+ *     avec la valeur serveur et la transaction est définitivement
+ *     abandonnée, ce qui produit une FAUSSE collision.
+ *
+ * La parade est en amont : claimStatut() fait un get() avant la
+ * transaction, ce qui remplit le cache local. Le callback reçoit
+ * alors la vraie valeur dès le premier appel. Ici, on refuse
+ * simplement et sans ambiguïté tout ce qui n'est pas « afaire ».
+ *
+ * @returns {string|undefined} la nouvelle valeur, ou undefined pour avorter
+ */
+export function decisionClaim(statutCourant) {
+  // Jamais de passage en « encours » depuis une valeur absente.
+  if (statutCourant === null || statutCourant === undefined) return undefined;
+  if (statutCourant !== STATUT_A_FAIRE) return undefined;
+  return STATUT_EN_COURS;
+}
+
+/**
+ * Décision appliquée DANS la transaction de libération.
+ * Même précaution que decisionClaim : jamais d'écriture depuis `null`.
+ */
+export function decisionLiberation(statutCourant) {
+  if (statutCourant === null || statutCourant === undefined) return undefined;
+  if (statutCourant !== STATUT_EN_COURS) return undefined;
+  return STATUT_A_FAIRE;
+}
+
+/** Normalise le retour de claimStatut (objet détaillé ou booléen hérité). */
+export function normaliserClaim(retour) {
+  if (retour === true) return { pris: true, raison: "pris" };
+  if (retour === false || retour === null || retour === undefined) {
+    return { pris: false, raison: "occupee" };
+  }
+  return { pris: retour.pris === true, raison: retour.raison || "occupee", ...retour };
+}
+
 export const ISSUES = {
   COLLISION: "collision",
   ECHEC_RESERVATION: "echec_reservation",
@@ -33,6 +82,11 @@ export const ISSUES = {
 
 export const MOTIFS = {
   COLLISION: "collision",
+  // Le pré-read voyait « afaire », mais la transaction n'a pas été
+  // commitée : quelqu'un est passé entre les deux. Distinct d'une
+  // fiche déjà occupée au moment du pré-read.
+  COLLISION_CONCURRENTE: "collision_concurrente",
+  FICHE_DISPARUE: "fiche_disparue",
   ROLLBACK_OK: "meta_echec_rollback_ok",
   ROLLBACK_NON_CONFIRME: "meta_echec_rollback_non_confirme",
   ROLLBACK_ECHOUE: "meta_echec_rollback_echoue",
@@ -108,8 +162,14 @@ export async function libererAvecRepli(prim, cle, identite, journal) {
  * ops requis : claimStatut, ecrireMetaReservation, remettreAFaire
  */
 export async function reserverAvecFilet(ops, cle, identite) {
-  const pris = await ops.claimStatut(cle);
-  if (pris !== true) return { obtenue: false, motif: MOTIFS.COLLISION };
+  const claim = normaliserClaim(await ops.claimStatut(cle));
+
+  if (!claim.pris) {
+    let motif = MOTIFS.COLLISION;
+    if (claim.raison === "course") motif = MOTIFS.COLLISION_CONCURRENTE;
+    else if (claim.raison === "disparue") motif = MOTIFS.FICHE_DISPARUE;
+    return { obtenue: false, motif, claim };
+  }
 
   try {
     await ops.ecrireMetaReservation(cle, identite);
@@ -149,8 +209,13 @@ export async function traiterAvecFilet(ops, cle, identite, contexte) {
   const reservation = await reserverAvecFilet(ops, cle, identite);
 
   if (!reservation.obtenue) {
+    const estCollision =
+      reservation.motif === MOTIFS.COLLISION ||
+      reservation.motif === MOTIFS.COLLISION_CONCURRENTE ||
+      reservation.motif === MOTIFS.FICHE_DISPARUE;
     return {
-      issue: reservation.motif === MOTIFS.COLLISION ? ISSUES.COLLISION : ISSUES.ECHEC_RESERVATION,
+      issue: estCollision ? ISSUES.COLLISION : ISSUES.ECHEC_RESERVATION,
+      motif: reservation.motif,
       detail: reservation,
     };
   }

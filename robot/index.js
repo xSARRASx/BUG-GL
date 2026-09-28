@@ -98,9 +98,17 @@ async function traiterFiche(db, fiche, identite, controle) {
   const res = await traiterAvecFilet(ops, cle, identite, controle.contexte);
 
   switch (res.issue) {
-    case ISSUES.COLLISION:
-      log.ignore(`   Fiche ${cle} : déjà prise par quelqu'un d'autre.`);
+    case ISSUES.COLLISION: {
+      const claim = (res.detail && res.detail.claim) || {};
+      if (res.motif === MOTIFS.COLLISION_CONCURRENTE) {
+        log.ignore(`   Fiche ${cle} : prise entre la lecture et le commit (statut lu « ${claim.statutLu} », devenu « ${claim.statutApres} »).`);
+      } else if (res.motif === MOTIFS.FICHE_DISPARUE) {
+        log.alerte(`   Fiche ${cle} : statut absent côté serveur — aucune écriture tentée.`);
+      } else {
+        log.ignore(`   Fiche ${cle} : déjà au statut « ${claim.statutLu} », non disponible.`);
+      }
       return "collision";
+    }
 
     case ISSUES.ECHEC_RESERVATION: {
       const motif = res.detail && res.detail.motif;

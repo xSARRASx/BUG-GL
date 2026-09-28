@@ -9,10 +9,11 @@
 
 import { ref, query, orderByChild, equalTo, get } from "firebase/database";
 import { log } from "./log.js";
+import { STATUT_A_FAIRE } from "./statuts.js";
 
-export const STATUT_A_FAIRE = "afaire";
-export const STATUT_EN_COURS = "encours";
-export const STATUT_TERMINE = "termine";
+// Les constantes vivent dans lib/statuts.js (module pur) et sont
+// re-exportées ici pour ne rien casser chez les appelants existants.
+export { STATUT_A_FAIRE, STATUT_EN_COURS, STATUT_TERMINE } from "./statuts.js";
 
 /**
  * Récupère les fiches dont le statut vaut « afaire ».

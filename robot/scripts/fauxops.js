@@ -68,9 +68,16 @@ export function creerFauxOps(options = {}) {
   const ops = {
     async claimStatut() {
       peutLever("claimStatut");
-      if (etat.statut !== "afaire") return false;
+      // Reproduit le contrat reel : pre-lecture puis transaction.
+      const statutLu = etat.statut === undefined ? null : etat.statut;
+      if (statutLu === null) return { pris: false, raison: "disparue", statutLu: null };
+      if (statutLu !== "afaire") return { pris: false, raison: "occupee", statutLu };
+      if (retoursFalse.claimTransaction) {
+        // Le pre-read voyait afaire mais le commit echoue : course.
+        return { pris: false, raison: "course", statutLu, statutApres: etat.statut };
+      }
       etat.statut = "encours";
-      return true;
+      return { pris: true, raison: "pris", statutLu };
     },
 
     async ecrireMetaReservation(cle, identite) {
