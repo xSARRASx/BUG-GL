@@ -30,7 +30,8 @@ import { extraire, typesJsonLd } from "../lib/html.js";
 import { normaliserUrl, cleUrl, analyserRobots, cheminAutorise, urlsDeSitemap } from "../lib/crawl.js";
 import { creerFauxSite, pageCorrecte, pagePauvre, SITEMAP_XML, ROBOTS_TXT, BASE as BASE_SITE } from "./fauxsite.js";
 import { selectionnerPourAudit, passagesPourToutCouvrir, creneauActuel, DUREE_CRENEAU_MS } from "../lib/rotation.js";
-import { urlAutorisee, hoteAutorise, ipv4Privee, ipv6Privee, memeSiteLegitime, RAISONS_REFUS } from "../lib/reseau.js";
+import { urlAutorisee, hoteAutorise, ipv4Privee, ipv6Privee, ipPrivee, groupesIPv6,
+         memeSiteLegitime, SANS_DNS, RAISONS_REFUS } from "../lib/reseau.js";
 import { creerFauxOps } from "./fauxops.js";
 
 const CLE = "-P2atEDbwnjG7JWnxhH2";
@@ -920,7 +921,7 @@ const siteComplet = (extra = {}) => ({
 
 const auditer1 = async (routes, ctx = CTX, opts = {}) => {
   const site = creerFauxSite(routes, opts.siteOpts);
-  const r = await analyser(ctx, { fetchImpl: site.fetchImpl, ...opts.analyse });
+  const r = await analyser(ctx, { fetchImpl: site.fetchImpl, resolveur: site.resolveur, ...opts.analyse });
   return { r, site, codes: (r.constats || []).map((c) => c.code) };
 };
 
@@ -1323,7 +1324,7 @@ await testAsync("lien externe → aucune requête émise", async () => {
     "/services": pageCorrecte({ canonical: SITE_A + "/services", liens: ["/"] }),
     "/robots.txt": ROBOTS_TXT,
   });
-  await analyser(CTX, { fetchImpl: site.fetchImpl, maxLiensVerifies: 5 });
+  await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur: site.resolveur, maxLiensVerifies: 5 });
   const fuites = site.urlsVisitees.filter((u) => !u.startsWith(SITE_A));
   assert.equal(fuites.length, 0, "requêtes hors périmètre : " + fuites.join(", "));
 });
@@ -1333,7 +1334,7 @@ await testAsync("sitemap externe déclaré dans robots.txt → aucune requête",
     "/": pageCorrecte({ liens: ["/"] }),
     "/robots.txt": `User-agent: *\nSitemap: ${EXTERNE}/sitemap.xml`,
   });
-  await analyser(CTX, { fetchImpl: site.fetchImpl, maxLiensVerifies: 0 });
+  await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur: site.resolveur, maxLiensVerifies: 0 });
   const fuites = site.urlsVisitees.filter((u) => !u.startsWith(SITE_A));
   assert.equal(fuites.length, 0, "le sitemap externe ne doit JAMAIS être requêté : " + fuites.join(", "));
 });
@@ -1345,7 +1346,7 @@ await testAsync("sous-sitemap externe dans un sitemapindex → aucune requête",
     "/sitemap.xml": `<?xml version="1.0"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
       <sitemap><loc>${EXTERNE}/sitemap-1.xml</loc></sitemap></sitemapindex>`,
   });
-  await analyser(CTX, { fetchImpl: site.fetchImpl, maxLiensVerifies: 0 });
+  await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur: site.resolveur, maxLiensVerifies: 0 });
   const fuites = site.urlsVisitees.filter((u) => !u.startsWith(SITE_A));
   assert.equal(fuites.length, 0, "le sous-sitemap externe ne doit pas être ouvert : " + fuites.join(", "));
 });
@@ -1356,7 +1357,7 @@ await testAsync("redirection vers un domaine externe → non suivie", async () =
     "/robots.txt": "User-agent: *\nDisallow:",
   }, { originesSupplementaires: [EXTERNE] });
 
-  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, maxLiensVerifies: 0 });
+  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur: site.resolveur, maxLiensVerifies: 0 });
   const fuites = site.urlsVisitees.filter((u) => u.startsWith(EXTERNE));
   assert.equal(fuites.length, 0, "la redirection externe ne doit pas être suivie : " + fuites.join(", "));
   assert.equal(r.disponible, false, "sans page accessible, l'audit est indisponible");
@@ -1370,7 +1371,7 @@ await testAsync("redirection HTTP → HTTPS du même site : correctement suivie"
   }, { base: SITE_A, originesSupplementaires: [siteHttp] });
 
   // Le faux serveur répond sur les deux origines ; on part en http.
-  const r = await analyser({ ...CTX, url: siteHttp + "/" }, { fetchImpl: site.fetchImpl, maxLiensVerifies: 0 });
+  const r = await analyser({ ...CTX, url: siteHttp + "/" }, { fetchImpl: site.fetchImpl, resolveur: site.resolveur, maxLiensVerifies: 0 });
   assert.equal(r.disponible, true, "le même site en http doit rester analysable");
 });
 
@@ -1383,7 +1384,7 @@ await testAsync("variante www légitime : correctement gérée", async () => {
     "/robots.txt": "User-agent: *\nDisallow:",
   }, { originesSupplementaires: [www] });
 
-  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, maxLiensVerifies: 0 });
+  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur: site.resolveur, maxLiensVerifies: 0 });
   const visitesWww = site.urlsVisitees.filter((u) => u.startsWith(www));
   assert.ok(visitesWww.length > 0, "la redirection vers www doit être suivie");
   assert.equal(r.disponible, true);
@@ -1394,7 +1395,7 @@ await testAsync("chaîne de redirections trop longue : abandon propre", async ()
   for (let i = 0; i < 10; i++) routes["/r" + i] = { status: 302, redirigeVers: "/r" + (i + 1) };
   routes["/"] = { status: 302, redirigeVers: "/r0" };
   const site = creerFauxSite(routes);
-  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, maxLiensVerifies: 0 });
+  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur: site.resolveur, maxLiensVerifies: 0 });
   assert.equal(r.disponible, false);
   assert.ok(site.urlsVisitees.length < 20, "la chaîne doit être coupée court");
 });
@@ -1481,7 +1482,7 @@ await testAsync("une URL interdite n'est JAMAIS requêtée, même une fois", asy
   for (const mauvaise of ["http://localhost:8080/", "http://127.0.0.1/", "http://169.254.169.254/",
                           "http://192.168.1.1/", "http://api.internal/"]) {
     const site = creerFauxSite({ "/": pageCorrecte() });
-    const r = await analyser({ ...CTX, url: mauvaise }, { fetchImpl: site.fetchImpl });
+    const r = await analyser({ ...CTX, url: mauvaise }, { fetchImpl: site.fetchImpl, resolveur: site.resolveur });
     assert.equal(r.disponible, false, `${mauvaise} ne doit pas être analysée`);
     assert.match(r.motif, /garde-fou réseau/i);
     assert.equal(site.requetes.length, 0, `AUCUNE requête ne doit partir vers ${mauvaise}`);
@@ -1495,10 +1496,165 @@ await testAsync("le garde-fou est réappliqué à chaque redirection", async () 
     "/robots.txt": "User-agent: *\nDisallow:",
   }, { originesSupplementaires: ["http://169.254.169.254"] });
 
-  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, maxLiensVerifies: 0 });
+  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur: site.resolveur, maxLiensVerifies: 0 });
   const fuites = site.urlsVisitees.filter((u) => u.includes("169.254.169.254"));
   assert.equal(fuites.length, 0, "la redirection vers les métadonnées doit être bloquée");
   assert.equal(r.disponible, false);
+});
+
+
+console.log("\n=== DNS : ACTIF PAR DÉFAUT (fail-safe) ===");
+
+await testAsync("sans resolver fourni, la vérification DNS s'applique quand même", async () => {
+  // Domaine réservé qui ne résout jamais : le resolver système échoue,
+  // donc l'URL doit être refusée. Si le DNS était court-circuité, elle
+  // passerait — c'est exactement la faille qu'on ferme.
+  const v = await urlAutorisee("https://domaine-qui-ne-resout-jamais.invalid/");
+  assert.equal(v.ok, false, "une URL non résolvable ne doit jamais être acceptée");
+  assert.equal(v.raison, RAISONS_REFUS.DNS);
+});
+
+await testAsync("un resolver nul ou invalide ne désactive PAS la vérification", async () => {
+  for (const valeur of [null, undefined, 0, "", "resolveurSysteme", {}, []]) {
+    const v = await urlAutorisee("https://domaine-qui-ne-resout-jamais.invalid/", { resolveur: valeur });
+    assert.equal(v.ok, false,
+      `resolveur=${JSON.stringify(valeur)} ne doit pas ouvrir une brèche`);
+  }
+});
+
+await testAsync("seul le jeton SANS_DNS désactive la vérification", async () => {
+  const v = await urlAutorisee("https://domaine-qui-ne-resout-jamais.invalid/", { resolveur: SANS_DNS });
+  assert.equal(v.ok, true, "l'exemption explicite doit fonctionner, pour les tests");
+});
+
+await testAsync("le crawler branche le resolver système par défaut", async () => {
+  const { creerCrawler } = await import("../lib/crawl.js");
+  const site = creerFauxSite({ "/": pageCorrecte() });
+  // Aucun resolveur fourni : le crawler doit utiliser le resolver système,
+  // qui échouera sur ce domaine réservé — donc aucune requête ne part.
+  const c = creerCrawler({ fetchImpl: site.fetchImpl });
+  const r = await c.explorer(BASE_SITE + "/");
+  assert.equal(r.ok, false, "sans DNS valide, l'exploration doit être refusée");
+  assert.equal(site.requetes.length, 0, "aucune requête ne doit partir");
+});
+
+console.log("\n=== DOMAINE PUBLIC → IP PRIVÉE : REFUS ET ZÉRO FETCH ===");
+
+/** Construit un faux site dont le DNS ment : nom public, IP interne. */
+const resolveurMenteur = (ip) => async () => [ip];
+
+for (const [etiquette, ip] of [
+  ["IP privée RFC1918", "192.168.1.20"],
+  ["loopback IPv4", "127.0.0.1"],
+  ["métadonnées cloud", "169.254.169.254"],
+  ["loopback IPv6", "::1"],
+  ["IPv6 ULA", "fd00:dead:beef::1"],
+  ["IPv4-mapped loopback", "::ffff:127.0.0.1"],
+  ["IPv4-mapped hexadécimal", "::ffff:7f00:1"],
+  ["link-local IPv4", "169.254.1.1"],
+  ["CGNAT", "100.64.0.1"],
+]) {
+  await testAsync(`site-public.example → ${etiquette} (${ip}) : refusé, 0 fetch`, async () => {
+    const site = creerFauxSite({ "/": pageCorrecte() });
+    const r = await analyser(
+      { ...CTX, url: "https://site-public.example/" },
+      { fetchImpl: site.fetchImpl, resolveur: resolveurMenteur(ip) }
+    );
+    assert.equal(r.disponible, false, `${ip} ne doit pas être analysée`);
+    assert.match(r.motif, /garde-fou réseau/i);
+    assert.equal(site.requetes.length, 0, `AUCUN fetch ne doit partir (${ip})`);
+  });
+}
+
+await testAsync("contrôle positif : IP publique seule → requête autorisée", async () => {
+  const site = creerFauxSite({
+    "/": pageCorrecte(),
+    "/robots.txt": ROBOTS_TXT,
+    "/sitemap.xml": SITEMAP_XML,
+  });
+  const r = await analyser(CTX, {
+    fetchImpl: site.fetchImpl,
+    resolveur: async () => ["93.184.216.34"],   // IP publique
+  });
+  assert.equal(r.disponible, true, "une IP publique doit laisser passer");
+  assert.ok(site.requetes.length > 0, "les requêtes doivent bien partir");
+});
+
+await testAsync("une seule IP privée parmi des publiques suffit à refuser", async () => {
+  const site = creerFauxSite({ "/": pageCorrecte() });
+  const r = await analyser(
+    { ...CTX, url: "https://site-public.example/" },
+    { fetchImpl: site.fetchImpl, resolveur: async () => ["93.184.216.34", "8.8.8.8", "10.0.0.7"] }
+  );
+  assert.equal(r.disponible, false);
+  assert.equal(site.requetes.length, 0);
+});
+
+await testAsync("la validation DNS est refaite à chaque redirection", async () => {
+  const PIEGE = "https://piege.example";
+  const site = creerFauxSite({
+    "/": { status: 302, redirigeVers: PIEGE + "/interne" },
+    "/robots.txt": "User-agent: *\nDisallow:",
+  }, { originesSupplementaires: [PIEGE] });
+
+  // Le domaine de départ est public ; la cible de redirection, elle,
+  // résout vers une IP privée.
+  const resolveur = async (hote) =>
+    hote === "piege.example" ? ["192.168.50.1"] : ["93.184.216.34"];
+
+  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur, maxLiensVerifies: 0 });
+  const fuites = site.urlsVisitees.filter((u) => u.startsWith(PIEGE));
+  assert.equal(fuites.length, 0, "la redirection vers une IP privée doit être bloquée");
+  assert.equal(r.disponible, false);
+});
+
+console.log("\n=== IPv6 : FORMES ÉQUIVALENTES D'UNE MÊME ADRESSE ===");
+
+await testAsync("toutes les notations de ::ffff:127.0.0.1 sont refusées", () => {
+  for (const a of ["::ffff:127.0.0.1", "::ffff:7f00:1", "::ffff:7f00:0001",
+                   "0:0:0:0:0:ffff:7f00:1", "0000:0000:0000:0000:0000:ffff:7f00:0001"]) {
+    assert.equal(ipv6Privee(a), true, `${a} désigne 127.0.0.1 et doit être refusée`);
+  }
+});
+
+await testAsync("IPv4 privées encapsulées en IPv6, pointées ou hexadécimales", () => {
+  for (const a of ["::ffff:192.168.1.1", "::ffff:c0a8:101",
+                   "::ffff:10.0.0.1", "::ffff:a00:1",
+                   "::ffff:169.254.169.254", "::ffff:a9fe:a9fe",
+                   "::ffff:172.16.0.1", "::ffff:ac10:1",
+                   "64:ff9b::192.168.1.1", "::192.168.1.1"]) {
+    assert.equal(ipv6Privee(a), true, `${a} doit être refusée`);
+  }
+});
+
+await testAsync("IPv6 publiques et IPv4 publiques encapsulées acceptées", () => {
+  for (const a of ["2001:4860:4860::8888", "2a00:1450:4007:80f::200e",
+                   "::ffff:8.8.8.8", "::ffff:808:808", "::ffff:93.184.216.34"]) {
+    assert.equal(ipv6Privee(a), false, `${a} devrait être acceptée`);
+  }
+});
+
+await testAsync("une adresse illisible est refusée par défaut", () => {
+  for (const a of ["pas-une-ip", "::ffff:999.1.1.1", "1:2:3::4::5", "gggg::1", "", null]) {
+    assert.equal(ipPrivee(a), true, `${JSON.stringify(a)} doit être refusée au bénéfice du doute`);
+  }
+  assert.equal(groupesIPv6("1:2:3::4::5"), null);
+});
+
+await testAsync("hoteAutorise refuse les IP littérales encapsulées", () => {
+  for (const h of ["[::ffff:127.0.0.1]", "[::ffff:7f00:1]", "[::1]", "[fd00::1]", "[::ffff:192.168.1.1]"]) {
+    assert.equal(hoteAutorise(h).ok, false, `${h} doit être refusé`);
+  }
+  assert.equal(hoteAutorise("[2001:4860:4860::8888]").ok, true);
+});
+
+await testAsync("une IP littérale privée dans l'URL n'émet aucun fetch", async () => {
+  for (const hote of ["[::ffff:127.0.0.1]", "[::ffff:7f00:1]", "[fd00::1]", "[::1]"]) {
+    const site = creerFauxSite({ "/": pageCorrecte() });
+    const r = await analyser({ ...CTX, url: `http://${hote}/` }, { fetchImpl: site.fetchImpl });
+    assert.equal(r.disponible, false, `${hote} ne doit pas être analysé`);
+    assert.equal(site.requetes.length, 0, `AUCUN fetch vers ${hote}`);
+  }
 });
 
 console.log(`\n${ok} test(s) réussi(s).${process.exitCode ? " ⚠️ Des tests ont échoué." : " Tout est vert."}\n`);

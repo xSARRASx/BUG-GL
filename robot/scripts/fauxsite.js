@@ -143,8 +143,20 @@ export function creerFauxSite(routes = {}, opts = {}) {
     return { ok: true, status: 200, url: String(url), headers: { get: () => null }, text: async () => route };
   };
 
+  // Resolver assorti : les origines servies par ce faux site résolvent
+  // vers une IP publique, tout le reste échoue. Les tests exercent donc
+  // le vrai chemin de vérification DNS.
+  const resolveur = async (hostname) => {
+    const hotes = [base, ...(opts.originesSupplementaires || [])]
+      .map((o) => { try { return new URL(o).hostname; } catch { return null; } })
+      .filter(Boolean);
+    if (hotes.includes(String(hostname).toLowerCase())) return ["93.184.216.34"];
+    throw new Error("NXDOMAIN simulé pour " + hostname);
+  };
+
   return {
     fetchImpl,
+    resolveur,
     requetes,
     base,
     get gets() { return requetes.filter((r) => r.methode === "GET"); },

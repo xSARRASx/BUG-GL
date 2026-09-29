@@ -18,7 +18,7 @@
 // =============================================================
 
 import { extraire, typesJsonLd } from "./html.js";
-import { urlAutorisee, memeSiteLegitime, RAISONS_REFUS } from "./reseau.js";
+import { urlAutorisee, memeSiteLegitime, resolveurSysteme, SANS_DNS, RAISONS_REFUS } from "./reseau.js";
 
 export const USER_AGENT =
   "GuestLuckyRobotSEO/1.0 (+https://xsarrasx.github.io/BUG-GL/ ; audit SEO en lecture seule)";
@@ -146,7 +146,14 @@ export function creerCrawler(options = {}) {
 
   const debut = Date.now();
   const budgetEpuise = () => Date.now() - debut > cfg.budgetMs;
-  const resolveur = options.resolveur;   // injectable ; absent = contrôle du nom seul
+  // ⚠️ FAIL-SAFE : la vérification DNS est ACTIVE par défaut.
+  // Un resolver absent, nul ou invalide retombe sur le resolver système —
+  // on ne peut pas perdre la protection par oubli. Seul le jeton SANS_DNS
+  // la désactive, et il est réservé aux tests.
+  const resolveur =
+    options.resolveur === SANS_DNS ? SANS_DNS
+    : typeof options.resolveur === "function" ? options.resolveur
+    : resolveurSysteme;
 
   // Origine de référence du site audité. Tout ce qui n'en relève pas
   // est refusé — y compris au milieu d'une chaîne de redirections.

@@ -22,7 +22,7 @@
 // =============================================================
 
 import { creerCrawler, DEFAUTS } from "./crawl.js";
-import { resolveurSysteme, RAISONS_REFUS } from "./reseau.js";
+import { RAISONS_REFUS } from "./reseau.js";
 import { auditer, NIVEAUX, REMPLACEMENTS_HOGUET } from "./audit.js";
 
 const LABEL_PRESTATION = {
@@ -142,11 +142,12 @@ export async function analyser(contexte = {}, options = {}) {
 
   // ?? et non || : 0 est une valeur volontaire (« ne vérifie aucun lien »).
   //
-  // Le resolveur DNS n'est branché que hors tests : il permet de
-  // refuser un domaine public qui pointerait vers une IP privée.
+  // Le resolveur n'est transmis que si l'appelant en fournit un.
+  // Sinon creerCrawler() branche le resolver système : la vérification
+  // DNS est active par défaut, sans dépendre de la présence de fetchImpl.
   const crawler = creerCrawler({
     fetchImpl: options.fetchImpl,
-    resolveur: options.resolveur ?? (options.fetchImpl ? undefined : resolveurSysteme),
+    ...(options.resolveur !== undefined ? { resolveur: options.resolveur } : {}),
     maxPages: options.maxPages ?? DEFAUTS.maxPages,
     timeoutMs: options.timeoutMs ?? DEFAUTS.timeoutMs,
     budgetMs: options.budgetMs ?? DEFAUTS.budgetMs,
