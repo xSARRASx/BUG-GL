@@ -86,9 +86,18 @@ Disallow: /`;
 export function creerFauxSite(routes = {}, opts = {}) {
   const base = opts.base || BASE;
   const requetes = [];
+  const resolutions = [];   // chaque appel au resolver, pour détecter un TOCTOU
 
   const fetchImpl = async (url, options = {}) => {
-    requetes.push({ url: String(url), methode: (options.method || "GET"), headers: options.headers || {} });
+    requetes.push({
+      url: String(url),
+      methode: (options.method || "GET"),
+      headers: options.headers || {},
+      // Adresses que le transport s'apprête à contacter : c'est ce que
+      // les tests d'épinglage inspectent.
+      adressesEpinglees: options.adressesEpinglees,
+      limiteOctets: options.limiteOctets,
+    });
 
     if (opts.jette) {
       const e = new Error("panne simulée");
@@ -131,6 +140,10 @@ export function creerFauxSite(routes = {}, opts = {}) {
           text: async () => "",
         };
       }
+      if (route.tropGros) {
+        const { ReponseTropVolumineuse } = await import("../lib/transport.js");
+        throw new ReponseTropVolumineuse(options.limiteOctets || 0);
+      }
       return {
         ok: status >= 200 && status < 300,
         status,
@@ -147,6 +160,9 @@ export function creerFauxSite(routes = {}, opts = {}) {
   // vers une IP publique, tout le reste échoue. Les tests exercent donc
   // le vrai chemin de vérification DNS.
   const resolveur = async (hostname) => {
+    resolutions.push(String(hostname));
+    // Un resolver « menteur » peut être injecté pour simuler un rebinding.
+    if (typeof opts.resolveur === "function") return opts.resolveur(hostname, resolutions.length);
     const hotes = [base, ...(opts.originesSupplementaires || [])]
       .map((o) => { try { return new URL(o).hostname; } catch { return null; } })
       .filter(Boolean);
@@ -158,7 +174,12 @@ export function creerFauxSite(routes = {}, opts = {}) {
     fetchImpl,
     resolveur,
     requetes,
+    resolutions,
     base,
+    /** Toutes les adresses réellement épinglées, dédoublonnées. */
+    get adressesContactees() {
+      return [...new Set(requetes.flatMap((r) => r.adressesEpinglees || []))];
+    },
     get gets() { return requetes.filter((r) => r.methode === "GET"); },
     get urlsVisitees() { return requetes.map((r) => r.url); },
   };

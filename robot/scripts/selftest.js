@@ -30,6 +30,11 @@ import { extraire, typesJsonLd } from "../lib/html.js";
 import { normaliserUrl, cleUrl, analyserRobots, cheminAutorise, urlsDeSitemap } from "../lib/crawl.js";
 import { creerFauxSite, pageCorrecte, pagePauvre, SITEMAP_XML, ROBOTS_TXT, BASE as BASE_SITE } from "./fauxsite.js";
 import { selectionnerPourAudit, passagesPourToutCouvrir, creneauActuel, DUREE_CRENEAU_MS } from "../lib/rotation.js";
+import { creerLookupEpingle, lireAvecLimite, essayerAdresses, LIMITES,
+         TransportRefuse, ReponseTropVolumineuse } from "../lib/transport.js";
+import { Readable } from "node:stream";
+import { creerFetchEpingle } from "../lib/transport.js";
+import http from "node:http";
 import { urlAutorisee, hoteAutorise, ipv4Privee, ipv6Privee, ipPrivee, groupesIPv6,
          memeSiteLegitime, SANS_DNS, RAISONS_REFUS } from "../lib/reseau.js";
 import { creerFauxOps } from "./fauxops.js";
@@ -1655,6 +1660,318 @@ await testAsync("une IP littérale privée dans l'URL n'émet aucun fetch", asyn
     assert.equal(r.disponible, false, `${hote} ne doit pas être analysé`);
     assert.equal(site.requetes.length, 0, `AUCUN fetch vers ${hote}`);
   }
+});
+
+
+console.log("\n=== ÉPINGLAGE DNS : ANTI-REBINDING (TOCTOU) ===");
+
+const PUBLIQUE = "93.184.216.34";
+const PIEGE_IP = "192.168.1.20";
+
+await testAsync("DNS rebinding : la 2e résolution ne sert JAMAIS à la connexion", async () => {
+  let appels = 0;
+  const site = creerFauxSite({
+    "/": pageCorrecte({ liens: ["/services"] }),
+    "/services": pageCorrecte({ canonical: BASE_SITE + "/services", liens: ["/"] }),
+    "/robots.txt": ROBOTS_TXT,
+    "/sitemap.xml": SITEMAP_XML,
+  }, {
+    // 1re résolution : IP publique. Toutes les suivantes : IP privée.
+    resolveur: async () => (++appels === 1 ? [PUBLIQUE] : [PIEGE_IP]),
+  });
+
+  await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur: site.resolveur });
+
+  assert.ok(appels > 1, "le resolver a bien été rappelé : le piège était armé");
+
+  // Rien n'est jamais contacté sur l'IP privée : les résolutions
+  // suivantes sont refusées AVANT qu'une requête ne parte.
+  assert.ok(!site.adressesContactees.includes(PIEGE_IP),
+    "aucune connexion ne doit viser " + PIEGE_IP + " — contactées : " + site.adressesContactees.join(", "));
+
+  // Et toute requête réellement émise est épinglée sur l'IP validée.
+  for (const req of site.requetes) {
+    assert.deepEqual(req.adressesEpinglees, [PUBLIQUE],
+      `la requête vers ${req.url} doit être épinglée sur l'IP publique`);
+  }
+});
+
+await testAsync("rebinding en cours de crawl : les pages suivantes sont refusées", async () => {
+  // Chaque requête déclenche sa propre résolution contrôlée. Le piège
+  // s'arme après la 5e requête contrôlée — soit après l'accueil — pour que celui-ci soit
+  // bien analysé et que les pages suivantes soient bloquées.
+  let appels = 0;
+  const site = creerFauxSite({
+    "/": pageCorrecte({ liens: ["/services", "/tarifs"] }),
+    "/services": pageCorrecte({ canonical: BASE_SITE + "/services", liens: ["/"] }),
+    "/tarifs": pageCorrecte({ canonical: BASE_SITE + "/tarifs", liens: ["/"] }),
+    "/robots.txt": ROBOTS_TXT,
+  }, { resolveur: async () => (++appels <= 5 ? [PUBLIQUE] : [PIEGE_IP]) });
+
+  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur: site.resolveur, maxLiensVerifies: 0 });
+
+  assert.ok(site.requetes.length > 0, "les premières requêtes doivent bien partir");
+  assert.ok(!site.adressesContactees.includes(PIEGE_IP),
+    "l'IP privée ne doit jamais être contactée : " + site.adressesContactees.join(", "));
+  assert.deepEqual([...new Set(site.adressesContactees)], [PUBLIQUE],
+    "seule l'IP validée au moment du contrôle est utilisée");
+  assert.equal(r.disponible, true, "ce qui a été récupéré avant le piège reste analysable");
+});
+
+await testAsync("chaque requête transporte les adresses déjà validées", async () => {
+  const site = creerFauxSite({
+    "/": pageCorrecte(),
+    "/robots.txt": ROBOTS_TXT,
+    "/sitemap.xml": SITEMAP_XML,
+  });
+  await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur: site.resolveur });
+  for (const req of site.requetes) {
+    assert.ok(Array.isArray(req.adressesEpinglees) && req.adressesEpinglees.length > 0,
+      `la requête vers ${req.url} doit porter des adresses épinglées`);
+    assert.deepEqual(req.adressesEpinglees, [PUBLIQUE]);
+  }
+});
+
+await testAsync("redirection vers www : nouvelle résolution PUIS nouvel épinglage", async () => {
+  const www = "https://www.exemple-fictif.invalid";
+  const site = creerFauxSite({
+    "/": { status: 301, redirigeVers: www + "/" },
+    [www + "/"]: pageCorrecte(),
+    [www + "/robots.txt"]: "User-agent: *\nDisallow:",
+    "/robots.txt": "User-agent: *\nDisallow:",
+  }, { originesSupplementaires: [www] });
+
+  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur: site.resolveur, maxLiensVerifies: 0 });
+  assert.equal(r.disponible, true);
+  // Le nom www a bien été résolu séparément avant d'être contacté.
+  assert.ok(site.resolutions.includes("www.exemple-fictif.invalid"),
+    "la cible de redirection doit être résolue et validée : " + site.resolutions.join(", "));
+  const versWww = site.requetes.filter((q) => q.url.startsWith(www));
+  assert.ok(versWww.length > 0);
+  assert.deepEqual(versWww[0].adressesEpinglees, [PUBLIQUE], "le saut doit être ré-épinglé");
+});
+
+await testAsync("lookup épinglé : ignore le hostname, ne résout jamais", () => {
+  const lookup = creerLookupEpingle([PUBLIQUE, "8.8.8.8"]);
+  // Peu importe le nom demandé — même un nom hostile — le lookup
+  // renvoie toujours les adresses validées.
+  for (const nom of ["exemple.fr", "attaquant.invalid", "localhost", ""]) {
+    lookup(nom, { all: true }, (err, res) => {
+      assert.equal(err, null);
+      assert.deepEqual(res.map((r) => r.address), [PUBLIQUE, "8.8.8.8"]);
+    });
+    lookup(nom, {}, (err, adresse, famille) => {
+      assert.equal(err, null);
+      assert.equal(adresse, PUBLIQUE);
+      assert.equal(famille, 4);
+    });
+  }
+});
+
+await testAsync("lookup épinglé : famille IPv6 correctement déduite", () => {
+  creerLookupEpingle(["2001:4860:4860::8888"])("x.invalid", {}, (err, adresse, famille) => {
+    assert.equal(err, null);
+    assert.equal(adresse, "2001:4860:4860::8888");
+    assert.equal(famille, 6);
+  });
+});
+
+await testAsync("lookup sans adresse validée : erreur, jamais de résolution", () => {
+  creerLookupEpingle([])("x.invalid", {}, (err) => {
+    assert.ok(err instanceof TransportRefuse);
+    assert.equal(err.raison, "aucune-adresse-validee");
+  });
+});
+
+await testAsync("échec de l'IP choisie : bascule UNIQUEMENT sur une IP validée", async () => {
+  const validees = ["93.184.216.34", "93.184.216.35"];
+  const tentees = [];
+  const res = await essayerAdresses(validees, async (adresse) => {
+    tentees.push(adresse);
+    if (adresse === validees[0]) throw new Error("ECONNREFUSED");
+    return "connecté sur " + adresse;
+  });
+  assert.equal(res, "connecté sur 93.184.216.35");
+  assert.deepEqual(tentees, validees, "seules les adresses validées sont essayées");
+});
+
+await testAsync("toutes les IP validées échouent : abandon propre", async () => {
+  const tentees = [];
+  await assert.rejects(
+    () => essayerAdresses(["1.2.3.4", "5.6.7.8"], async (a) => {
+      tentees.push(a);
+      throw new Error("ECONNREFUSED " + a);
+    }),
+    /ECONNREFUSED/
+  );
+  assert.deepEqual(tentees, ["1.2.3.4", "5.6.7.8"], "les deux ont été essayées, puis abandon");
+});
+
+await testAsync("liste d'adresses vide : refus immédiat, aucune tentative", async () => {
+  let appelee = false;
+  await assert.rejects(
+    () => essayerAdresses([], async () => { appelee = true; }),
+    TransportRefuse
+  );
+  assert.equal(appelee, false, "aucune connexion ne doit être tentée");
+});
+
+console.log("\n=== LIMITE DE TAILLE DES RÉPONSES ===");
+
+const fluxDe = (octets) => Readable.from([Buffer.alloc(octets, 0x61)]);
+
+await testAsync("une réponse sous la limite est lue normalement", async () => {
+  const corps = await lireAvecLimite(fluxDe(1000), 5000);
+  assert.equal(corps.length, 1000);
+});
+
+await testAsync("une réponse au-dessus de la limite est abandonnée", async () => {
+  await assert.rejects(() => lireAvecLimite(fluxDe(6000), 5000), ReponseTropVolumineuse);
+});
+
+await testAsync("la limite porte sur les octets REÇUS, pas sur Content-Length", async () => {
+  // Flux en plusieurs morceaux : aucun n'excède la limite seul,
+  // mais leur somme si. Un Content-Length mensonger ne protégerait pas.
+  const flux = Readable.from([Buffer.alloc(400), Buffer.alloc(400), Buffer.alloc(400)]);
+  await assert.rejects(() => lireAvecLimite(flux, 1000), ReponseTropVolumineuse);
+});
+
+await testAsync("le flux est bien détruit quand la limite est franchie", async () => {
+  const flux = Readable.from([Buffer.alloc(2000)]);
+  await assert.rejects(() => lireAvecLimite(flux, 100), ReponseTropVolumineuse);
+  assert.equal(flux.destroyed, true, "le flux doit être coupé, pas lu jusqu'au bout");
+});
+
+await testAsync("limite exactement atteinte : accepté ; un octet de plus : refusé", async () => {
+  assert.equal((await lireAvecLimite(fluxDe(1000), 1000)).length, 1000);
+  await assert.rejects(() => lireAvecLimite(fluxDe(1001), 1000), ReponseTropVolumineuse);
+});
+
+await testAsync("les limites sont différenciées par nature de ressource", async () => {
+  assert.ok(LIMITES.robots < LIMITES.html, "robots.txt doit être plus serré que le HTML");
+  assert.ok(LIMITES.sitemap >= LIMITES.html, "un sitemap peut légitimement être plus gros");
+
+  const site = creerFauxSite({
+    "/": pageCorrecte(),
+    "/robots.txt": ROBOTS_TXT,
+    "/sitemap.xml": SITEMAP_XML,
+  });
+  await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur: site.resolveur });
+
+  const robots = site.requetes.find((r) => r.url.endsWith("/robots.txt"));
+  const sitemap = site.requetes.find((r) => r.url.endsWith("/sitemap.xml"));
+  const page = site.requetes.find((r) => r.url === BASE_SITE + "/");
+  assert.equal(robots.limiteOctets, LIMITES.robots);
+  assert.equal(sitemap.limiteOctets, LIMITES.sitemap);
+  assert.equal(page.limiteOctets, LIMITES.html);
+});
+
+await testAsync("une page trop volumineuse n'interrompt pas l'audit", async () => {
+  const site = creerFauxSite({
+    "/": pageCorrecte({ liens: ["/enorme", "/services"] }),
+    "/enorme": { status: 200, tropGros: true },
+    "/services": pageCorrecte({ canonical: BASE_SITE + "/services", liens: ["/"] }),
+    "/robots.txt": ROBOTS_TXT,
+  });
+  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur: site.resolveur, maxLiensVerifies: 0 });
+  assert.equal(r.disponible, true, "l'audit doit continuer sur les autres pages");
+  const codes = r.constats.map((c) => c.code);
+  assert.ok(codes.includes("page-inaccessible"), "la page abandonnée doit être signalée");
+});
+
+
+console.log("\n=== TRANSPORT RÉEL : ÉPINGLAGE VÉRIFIÉ SUR SOCKET ===");
+console.log("    (serveur local, aucune sortie réseau)");
+
+/** Petit serveur local, pour prouver que l'épinglage fonctionne vraiment. */
+async function serveurLocal(gestionnaire) {
+  const srv = http.createServer(gestionnaire);
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  return { srv, port: srv.address().port, fermer: () => new Promise((r) => srv.close(r)) };
+}
+
+await testAsync("le transport se connecte à l'IP épinglée, pas au hostname", async () => {
+  const recus = [];
+  const { port, fermer } = await serveurLocal((req, res) => {
+    recus.push({ host: req.headers.host, ua: req.headers["user-agent"], url: req.url });
+    res.writeHead(200, { "Content-Type": "text/html" });
+    res.end("<html><head><title>Servi localement</title></head><body><h1>OK</h1></body></html>");
+  });
+
+  try {
+    const fetchEpingle = creerFetchEpingle({});
+    // Le nom n'existe pas et ne résout nulle part : seule l'adresse
+    // épinglée permet d'atteindre le serveur. Si le transport résolvait
+    // le nom lui-même, la requête échouerait.
+    const rep = await fetchEpingle(`http://nom-qui-ne-resout-pas.invalid:${port}/page`, {
+      headers: { "User-Agent": "TestRobot" },
+      adressesEpinglees: ["127.0.0.1"],
+      limiteOctets: 100000,
+    });
+
+    assert.equal(rep.status, 200);
+    assert.match(await rep.text(), /Servi localement/);
+    assert.equal(recus.length, 1);
+    // Le hostname d'origine est conservé dans Host — c'est lui qui sert
+    // au routage côté serveur et à la validation TLS en HTTPS.
+    assert.equal(recus[0].host, `nom-qui-ne-resout-pas.invalid:${port}`,
+      "l'en-tête Host doit porter le nom d'origine, pas l'IP");
+    assert.equal(recus[0].url, "/page");
+    assert.equal(recus[0].ua, "TestRobot");
+  } finally {
+    await fermer();
+  }
+});
+
+await testAsync("le transport coupe vraiment une réponse trop volumineuse", async () => {
+  const { port, fermer } = await serveurLocal((req, res) => {
+    res.writeHead(200, { "Content-Type": "text/html" });
+    // Flux volontairement plus gros que la limite, envoyé en morceaux.
+    for (let i = 0; i < 50; i++) res.write(Buffer.alloc(10_000, 0x61));
+    res.end();
+  });
+
+  try {
+    const fetchEpingle = creerFetchEpingle({});
+    await assert.rejects(
+      () => fetchEpingle(`http://nom-qui-ne-resout-pas.invalid:${port}/`, {
+        adressesEpinglees: ["127.0.0.1"],
+        limiteOctets: 50_000,
+      }),
+      ReponseTropVolumineuse
+    );
+  } finally {
+    await fermer();
+  }
+});
+
+await testAsync("le transport lit les en-têtes de redirection sans les suivre", async () => {
+  const { port, fermer } = await serveurLocal((req, res) => {
+    res.writeHead(301, { Location: "https://ailleurs.invalid/" });
+    res.end();
+  });
+
+  try {
+    const fetchEpingle = creerFetchEpingle({});
+    const rep = await fetchEpingle(`http://nom-qui-ne-resout-pas.invalid:${port}/`, {
+      adressesEpinglees: ["127.0.0.1"],
+      limiteOctets: 10000,
+    });
+    assert.equal(rep.status, 301);
+    assert.equal(rep.headers.get("location"), "https://ailleurs.invalid/",
+      "la cible doit être lisible, pour que crawl.js la revalide");
+    assert.equal(rep.ok, false, "une redirection n'est pas un succès");
+  } finally {
+    await fermer();
+  }
+});
+
+await testAsync("le transport refuse une URL interdite si aucune adresse n'est fournie", async () => {
+  const fetchEpingle = creerFetchEpingle({});
+  await assert.rejects(
+    () => fetchEpingle("http://169.254.169.254/latest/meta-data/", { limiteOctets: 1000 }),
+    TransportRefuse
+  );
 });
 
 console.log(`\n${ok} test(s) réussi(s).${process.exitCode ? " ⚠️ Des tests ont échoué." : " Tout est vert."}\n`);

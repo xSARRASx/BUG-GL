@@ -19,6 +19,7 @@
 
 import { extraire, typesJsonLd } from "./html.js";
 import { urlAutorisee, memeSiteLegitime, resolveurSysteme, SANS_DNS, RAISONS_REFUS } from "./reseau.js";
+import { creerFetchEpingle, LIMITES, ReponseTropVolumineuse } from "./transport.js";
 
 export const USER_AGENT =
   "GuestLuckyRobotSEO/1.0 (+https://xsarrasx.github.io/BUG-GL/ ; audit SEO en lecture seule)";
@@ -26,6 +27,11 @@ export const USER_AGENT =
 export const DEFAUTS = {
   maxPages: 15,
   maxRedirections: 3,
+  // Limites de taille par nature de ressource : on ne charge jamais
+  // un corps de taille inconnue en mémoire.
+  limiteHtml: LIMITES.html,
+  limiteRobots: LIMITES.robots,
+  limiteSitemap: LIMITES.sitemap,
   maxLiensVerifies: 10,   // liens internes non explorés, vérifiés en plus
   timeoutMs: 10000,
   budgetMs: 60000,
@@ -141,8 +147,6 @@ const estIndexSitemap = (xml) => /<sitemapindex[\s>]/i.test(String(xml || ""));
 // -------------------------------------------------------------
 export function creerCrawler(options = {}) {
   const cfg = { ...DEFAUTS, ...options };
-  const http = options.fetchImpl || globalThis.fetch;
-  if (typeof http !== "function") throw new Error("Aucune implémentation de fetch disponible.");
 
   const debut = Date.now();
   const budgetEpuise = () => Date.now() - debut > cfg.budgetMs;
@@ -155,6 +159,12 @@ export function creerCrawler(options = {}) {
     : typeof options.resolveur === "function" ? options.resolveur
     : resolveurSysteme;
 
+  // Transport par défaut : connexion épinglée sur une IP déjà validée,
+  // sans nouvelle résolution DNS (voir lib/transport.js). Les tests
+  // injectent leur propre implémentation.
+  const http = options.fetchImpl || creerFetchEpingle({ resolveur });
+  if (typeof http !== "function") throw new Error("Aucune implémentation de transport disponible.");
+
   // Origine de référence du site audité. Tout ce qui n'en relève pas
   // est refusé — y compris au milieu d'une chaîne de redirections.
   let origineReference = null;
@@ -162,6 +172,9 @@ export function creerCrawler(options = {}) {
   /** Une URL a-t-elle le droit d'être contactée ? Deux contrôles cumulés. */
   async function contactAutorise(url) {
     // 1. Garde-fou réseau : jamais d'hôte local, privé ou de métadonnées.
+    //    Cette résolution est la SEULE : ses adresses sont ensuite
+    //    épinglées pour la connexion, ce qui ferme la fenêtre de
+    //    DNS rebinding.
     const verdict = await urlAutorisee(url, { resolveur });
     if (!verdict.ok) return verdict;
 
@@ -169,11 +182,11 @@ export function creerCrawler(options = {}) {
     if (origineReference && !memeSiteLegitime(url, origineReference)) {
       return { ok: false, raison: "hors-perimetre" };
     }
-    return { ok: true };
+    return { ok: true, adresses: verdict.adresses };
   }
 
   /** Une seule requête HTTP, sans suivre les redirections. */
-  async function requeteBrute(url, methode) {
+  async function requeteBrute(url, methode, adresses, limite) {
     const controleur = typeof AbortController === "function" ? new AbortController() : null;
     const minuteur = controleur ? setTimeout(() => controleur.abort(), cfg.timeoutMs) : null;
     try {
@@ -188,9 +201,14 @@ export function creerCrawler(options = {}) {
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
         signal: controleur ? controleur.signal : undefined,
+        // Adresses DÉJÀ validées : le transport s'y épingle et
+        // n'effectue aucune nouvelle résolution DNS.
+        adressesEpinglees: adresses,
+        limiteOctets: limite,
       });
       return { rep };
     } catch (e) {
+      if (e instanceof ReponseTropVolumineuse) return { erreur: "reponse-trop-volumineuse" };
       const motif = e && (e.name === "AbortError" || /abort/i.test(e.message || "")) ? "timeout" : "reseau";
       return { erreur: motif };
     } finally {
@@ -205,7 +223,7 @@ export function creerCrawler(options = {}) {
    * Chaque saut est revalidé : garde-fou réseau + périmètre du site.
    * Ne lève jamais : renvoie un objet d'échec.
    */
-  async function recuperer(urlDemandee, methode = "GET") {
+  async function recuperer(urlDemandee, methode = "GET", limite = cfg.limiteHtml) {
     if (budgetEpuise()) return { ok: false, motif: "budget-epuise", url: urlDemandee };
 
     // Contrôle AVANT la toute première requête : aucune URL interdite
@@ -216,12 +234,13 @@ export function creerCrawler(options = {}) {
     }
 
     let url = String(urlDemandee);
+    let adresses = permis.adresses;   // épinglage du saut courant
     let redirections = 0;
 
     while (true) {
       if (budgetEpuise()) return { ok: false, motif: "budget-epuise", url };
 
-      const { rep, erreur } = await requeteBrute(url, methode);
+      const { rep, erreur } = await requeteBrute(url, methode, adresses, limite);
       if (erreur) return { ok: false, motif: erreur, url };
 
       if (EST_REDIRECTION(rep.status)) {
@@ -234,12 +253,14 @@ export function creerCrawler(options = {}) {
         let suivante;
         try { suivante = new URL(cible, url).href; } catch { return { ok: false, motif: "redirection-invalide", url }; }
 
-        // Chaque saut est revalidé : c'est ici que se joue la sécurité.
+        // Chaque saut est revalidé : nouvelle résolution CONTRÔLÉE,
+        // puis ré-épinglage sur les adresses qu'elle vient de valider.
         const okSaut = await contactAutorise(suivante);
         if (!okSaut.ok) {
           return { ok: false, motif: "redirection-refusee", raison: okSaut.raison, url, cible: suivante };
         }
         url = suivante;
+        adresses = okSaut.adresses;
         continue;
       }
 
@@ -284,7 +305,7 @@ export function creerCrawler(options = {}) {
     };
 
     // --- 1. robots.txt ---
-    const rRobots = await recuperer(origine + "/robots.txt");
+    const rRobots = await recuperer(origine + "/robots.txt", "GET", cfg.limiteRobots);
     if (rRobots.ok && /disallow|user-agent|sitemap/i.test(rRobots.corps)) {
       resultat.robotsTxt = analyserRobots(rRobots.corps);
     }
@@ -293,17 +314,19 @@ export function creerCrawler(options = {}) {
     // ⚠️ Un robots.txt peut déclarer un sitemap sur un AUTRE domaine.
     // On les filtre AVANT toute requête : aucune URL externe ne doit
     // être contactée, même une seule fois.
-    const candidats = [
+    // Dédoublonné : un sitemap déclaré dans robots.txt est souvent
+    // aussi le candidat par défaut. Sans cela, on le téléchargeait deux fois.
+    const candidats = [...new Set([
       ...resultat.robotsTxt.sitemaps.filter((u) => memeSiteLegitime(u, origine)),
       origine + "/sitemap.xml",
       origine + "/sitemap_index.xml",
-    ];
+    ].map((u) => { try { return new URL(u).href; } catch { return u; } }))];
     resultat.sitemapsExternesIgnores = resultat.robotsTxt.sitemaps
       .filter((u) => !memeSiteLegitime(u, origine)).length;
 
     for (const candidat of candidats) {
       if (resultat.sitemap.present || budgetEpuise()) break;
-      const r = await recuperer(candidat);
+      const r = await recuperer(candidat, "GET", cfg.limiteSitemap);
       if (!r.ok || !/<(urlset|sitemapindex)[\s>]/i.test(r.corps)) continue;
 
       let urls = urlsDeSitemap(r.corps);
@@ -311,7 +334,7 @@ export function creerCrawler(options = {}) {
         // Index : on ouvre le premier sous-sitemap DU MÊME SITE, pas tous.
         const interne = urls.find((u) => memeSiteLegitime(u, origine));
         if (interne) {
-          const sous = await recuperer(interne);
+          const sous = await recuperer(interne, "GET", cfg.limiteSitemap);
           urls = sous.ok ? urlsDeSitemap(sous.corps) : [];
         } else {
           urls = [];
@@ -394,7 +417,7 @@ export function creerCrawler(options = {}) {
 
     for (const l of aVerifier) {
       if (budgetEpuise()) break;
-      const r = await recuperer(l.url.href, "HEAD");
+      const r = await recuperer(l.url.href, "HEAD", cfg.limiteHtml);
       if (!r.ok && r.motif === "http" && r.status >= 400) {
         resultat.liensCasses.push({ url: l.url.href, depuis: l.depuis, status: r.status });
       }
