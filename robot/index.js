@@ -23,7 +23,7 @@ import { connecter, deconnecter, ConfigurationManquante } from "./lib/firebase.j
 import { listerAFaire } from "./lib/detect.js";
 import { verifier } from "./lib/validate.js";
 import { resumeAnonyme, valeursSensiblesDe } from "./lib/redact.js";
-import { analyser } from "./lib/analyse.js";
+import { analyser, resumeAnonymeAnalyse } from "./lib/analyse.js";
 
 import { claimStatut, ecrireMetaReservation, remettreAFaire, liberer } from "./lib/claim.js";
 import { demarrer, avancer, echouer, lireEtat, verrouPerime } from "./lib/state.js";
@@ -43,7 +43,45 @@ function lireConfig() {
   if (cfg.allowScheduledActive !== true) cfg.allowScheduledActive = false;
   // Liste blanche absente ou invalide = aucune fiche autorisée.
   if (!Array.isArray(cfg.allowedTestIds)) cfg.allowedTestIds = [];
+  if (cfg.analyserEnDryRun !== false) cfg.analyserEnDryRun = true;
+  const maxA = Number(cfg.maxAnalysesParPassage);
+  cfg.maxAnalysesParPassage = Number.isFinite(maxA) && maxA >= 0 ? Math.floor(maxA) : 2;
   return cfg;
+}
+
+// -------------------------------------------------------------
+//  Analyse publique en dry-run — lecture seule
+// -------------------------------------------------------------
+//  ⚠️ Rien de ce qui est journalisé ici ne doit permettre
+//  d'identifier le client : uniquement des compteurs et des
+//  catégories de problèmes. Jamais d'URL, de ville, de contenu
+//  de page ni de rapport.
+async function analyserEtJournaliser(contexte, bilan) {
+  let resultat;
+  try {
+    resultat = await analyser(contexte);
+  } catch (e) {
+    bilan.auditsImpossibles++;
+    log.alerte(`   Audit impossible : ${erreurLisible(e)}`);
+    return;
+  }
+
+  const r = resumeAnonymeAnalyse(resultat);
+
+  if (!r.disponible) {
+    bilan.auditsImpossibles++;
+    log.alerte(`   Audit impossible : ${r.motif}`);
+    return;
+  }
+
+  bilan.auditees++;
+  log.ok(`   Audit public terminé (lecture seule) :`);
+  log.info(`      pages analysées ..... ${r.pagesAnalysees}${r.pagesEnEchec ? ` (+${r.pagesEnEchec} en échec)` : ""}`);
+  log.info(`      problèmes critiques . ${r.erreursCritiques}`);
+  log.info(`      avertissements ...... ${r.avertissements}`);
+  log.info(`      points conformes .... ${r.pointsOk}`);
+  log.info(`      catégories .......... ${r.categories.length ? r.categories.join(", ") : "aucune"}`);
+  log.info("      [DRY-RUN] Rapport NON écrit en base.");
 }
 
 // -------------------------------------------------------------
@@ -187,6 +225,7 @@ async function main() {
   log.info(`allowScheduledActive . ${config.allowScheduledActive ? "ACTIVÉ" : "désactivé"}`);
   log.info(`Liste blanche ........ ${allowedIds.length ? allowedIds.join(", ") : "VIDE — aucune écriture possible"}`);
   log.info(`Max par passage ...... ${dryRun ? "sans objet (dry-run)" : config.maxFichesParPassage}`);
+  log.info(`Audit public ......... ${config.analyserEnDryRun ? `oui, max ${config.maxAnalysesParPassage} par passage (lecture seule)` : "désactivé"}`);
 
   // 4ᵉ verrou : le mode actif ne doit jamais se déclencher tout seul.
   const mode = verifierModeAutorise({
@@ -237,7 +276,9 @@ async function main() {
     }
 
     log.titre("VÉRIFICATION");
-    const bilan = { traitables: 0, bloquees: 0, horsListe: 0, collisions: 0, echecs: 0, pretes: 0, analyseIndispo: 0 };
+    let analysesFaites = 0;
+    const bilan = { traitables: 0, bloquees: 0, horsListe: 0, collisions: 0, echecs: 0, pretes: 0,
+                    analyseIndispo: 0, auditees: 0, auditsImpossibles: 0 };
 
     for (const fiche of aTraiter) {
       // Toute valeur sensible de cette fiche est masquée dans la suite des logs.
@@ -275,6 +316,14 @@ async function main() {
 
       if (dryRun) {
         log.info("   [DRY-RUN] Aucune réservation, aucune écriture.");
+        // L'analyse publique est en LECTURE SEULE : elle peut donc tourner
+        // en dry-run sans risque. Elle ne touche ni Firebase, ni le site.
+        if (config.analyserEnDryRun && analysesFaites < config.maxAnalysesParPassage) {
+          analysesFaites++;
+          await analyserEtJournaliser(controle.contexte, bilan);
+        } else if (config.analyserEnDryRun) {
+          log.ignore(`   Analyse non lancée : limite de ${config.maxAnalysesParPassage} par passage atteinte.`);
+        }
         continue;
       }
 
@@ -306,6 +355,10 @@ async function main() {
     log.info(`Fiches examinées ....... ${aTraiter.length}`);
     log.info(`Traitables ............. ${bilan.traitables}`);
     log.info(`Bloquées ............... ${bilan.bloquees}`);
+    if (config.analyserEnDryRun) {
+      log.info(`Sites audités .......... ${bilan.auditees}`);
+      log.info(`Audits impossibles ..... ${bilan.auditsImpossibles}`);
+    }
     if (!dryRun) {
       log.info(`Hors liste blanche ..... ${bilan.horsListe}`);
       log.info(`Prêtes à valider ....... ${bilan.pretes}`);

@@ -77,12 +77,22 @@ export function verifier(site) {
     traitable: bloquants.length === 0,
     bloquants,
     avertissements,
-    // Contexte non identifiant, utilisable plus tard pour construire le prompt d'analyse.
+    // Contexte transmis à l'analyse publique.
+    //
+    // ⚠️ LISTE BLANCHE STRICTE : on n'y met QUE ce dont l'audit a besoin.
+    // Sont volontairement exclus, et doivent le rester : adminUrl, login,
+    // pass, email, google, phone, adresse, files. L'analyse travaille
+    // uniquement sur l'URL publique.
     contexte: {
+      url: rempli(site.url) ? site.url.trim() : null,
+      ville: rempli(site.ville) ? site.ville.trim() : null,
+      // Une zone non confirmée ne doit jamais servir de base au contenu.
+      zone: (site.zoneNa !== true && rempli(site.zone)) ? site.zone.trim() : null,
+      zoneConfirmee: site.zoneNa !== true && rempli(site.zone),
       prestation: site.prestation || null,
+      activite: site.activite || null,
       carteG: site.carte === "oui",
       loiHoguet: site.carte !== "oui",
-      activite: site.activite || null,
     },
   };
 }

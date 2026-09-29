@@ -17,7 +17,6 @@ const ICI = dirname(fileURLToPath(import.meta.url));
 
 import { initGuard, assertWriteAllowed, assertTermineAllowed, estAutorisee, getAllowedIds,
          verifierModeAutorise, DryRunViolation, AutoTermineDisabled, FicheNonAutorisee } from "../lib/guard.js";
-import { verifier } from "../lib/validate.js";
 import { resumeAnonyme, nettoyerTexte, valeursSensiblesDe, CHAMPS_SENSIBLES } from "../lib/redact.js";
 import { entete, composerNote } from "../lib/note.js";
 import { traiterAvecFilet, reserverAvecFilet, libererAvecRepli, rollbackConfirme,
@@ -25,6 +24,11 @@ import { traiterAvecFilet, reserverAvecFilet, libererAvecRepli, rollbackConfirme
 import { creerClientRest, RAISONS } from "../lib/rest.js";
 import { ajouterRapport, MAX_TENTATIVES_RAPPORT } from "../lib/report.js";
 import { creerFauxFetch, TOKEN_FACTICE } from "./fauxfetch.js";
+import { analyser, resumeAnonymeAnalyse } from "../lib/analyse.js";
+import { verifier } from "../lib/validate.js";
+import { extraire, typesJsonLd } from "../lib/html.js";
+import { normaliserUrl, cleUrl, analyserRobots, cheminAutorise, urlsDeSitemap } from "../lib/crawl.js";
+import { creerFauxSite, pageCorrecte, pagePauvre, SITEMAP_XML, ROBOTS_TXT, BASE as BASE_SITE } from "./fauxsite.js";
 import { creerFauxOps } from "./fauxops.js";
 
 const CLE = "-P2atEDbwnjG7JWnxhH2";
@@ -885,6 +889,350 @@ await testAsync("ajouterRapport est bloqué par le garde-fou en dry-run", async 
 await testAsync("la limite de tentatives par défaut est stricte et bornée", () => {
   assert.ok(Number.isInteger(MAX_TENTATIVES_RAPPORT));
   assert.ok(MAX_TENTATIVES_RAPPORT >= 2 && MAX_TENTATIVES_RAPPORT <= 10);
+});
+
+
+console.log("\n=== ANALYSE SEO PUBLIQUE ===");
+console.log("    (lecture seule — aucun OpenAI, aucun WordPress)");
+
+const CTX = {
+  url: BASE_SITE + "/",
+  ville: "Villeneuve-Fictive",
+  zone: "Villeneuve-Fictive, Bourg-Imaginaire, Saint-Exemple",
+  zoneConfirmee: true,
+  prestation: "seo_complet",
+  activite: "conciergerie",
+  carteG: false,
+  loiHoguet: true,
+};
+
+const siteComplet = (extra = {}) => ({
+  "/": pageCorrecte(),
+  "/services": pageCorrecte({ title: "Nos services de conciergerie à Villeneuve-Fictive", canonical: BASE_SITE + "/services", liens: ["/", "/contact"] }),
+  "/tarifs": pageCorrecte({ title: "Tarifs conciergerie Villeneuve-Fictive et Bourg-Imaginaire", canonical: BASE_SITE + "/tarifs", liens: ["/"] }),
+  "/contact": pageCorrecte({ title: "Contact conciergerie Villeneuve-Fictive Saint-Exemple", canonical: BASE_SITE + "/contact", liens: ["/"] }),
+  "/robots.txt": ROBOTS_TXT,
+  "/sitemap.xml": SITEMAP_XML,
+  ...extra,
+});
+
+const auditer1 = async (routes, ctx = CTX, opts = {}) => {
+  const site = creerFauxSite(routes, opts.siteOpts);
+  const r = await analyser(ctx, { fetchImpl: site.fetchImpl, ...opts.analyse });
+  return { r, site, codes: (r.constats || []).map((c) => c.code) };
+};
+
+await testAsync("1. site correct : audité, peu de critiques", async () => {
+  const { r, codes } = await auditer1(siteComplet());
+  assert.equal(r.disponible, true);
+  assert.ok(r.pagesAnalysees >= 3, "au moins 3 pages analysées");
+  assert.ok(codes.includes("https-ok"));
+  assert.ok(codes.includes("ville-accueil-ok"), "la ville doit être détectée sur l'accueil");
+  assert.ok(codes.includes("vocabulaire-ok"), "aucun terme Hoguet ne doit être trouvé");
+  assert.ok(!codes.includes("title-absent"));
+  assert.ok(!codes.includes("h1-absent"));
+});
+
+await testAsync("2. title absent → critique", async () => {
+  const { codes } = await auditer1(siteComplet({ "/": pageCorrecte({ title: null }) }));
+  assert.ok(codes.includes("title-absent"));
+});
+
+await testAsync("3. meta description absente → avertissement", async () => {
+  const { r, codes } = await auditer1(siteComplet({ "/": pageCorrecte({ description: null }) }));
+  assert.ok(codes.includes("description-absente"));
+  const c = r.constats.find((x) => x.code === "description-absente");
+  assert.equal(c.niveau, "avertissement");
+});
+
+await testAsync("4. title et meta dupliqués entre pages", async () => {
+  const meme = pageCorrecte({ canonical: null });
+  const { codes } = await auditer1(siteComplet({ "/": meme, "/services": meme, "/tarifs": meme }));
+  assert.ok(codes.includes("title-duplique"), "titres identiques非 détectés");
+  assert.ok(codes.includes("description-dupliquee"));
+});
+
+await testAsync("5. plusieurs H1 → avertissement", async () => {
+  const { codes } = await auditer1(siteComplet({ "/": pageCorrecte({ h1: ["Premier", "Deuxième"] }) }));
+  assert.ok(codes.includes("h1-multiple"));
+});
+
+await testAsync("6. H1 absent → critique", async () => {
+  const { r, codes } = await auditer1(siteComplet({ "/": pageCorrecte({ h1: null }) }));
+  assert.ok(codes.includes("h1-absent"));
+  assert.equal(r.constats.find((x) => x.code === "h1-absent").niveau, "critique");
+});
+
+await testAsync("7. noindex → critique", async () => {
+  const { r, codes } = await auditer1(siteComplet({ "/": pageCorrecte({ robots: "noindex, follow" }) }));
+  assert.ok(codes.includes("noindex"));
+  assert.equal(r.constats.find((x) => x.code === "noindex").niveau, "critique");
+});
+
+await testAsync("8. image sans alt → avertissement", async () => {
+  const { codes } = await auditer1(siteComplet({
+    "/": pageCorrecte({ images: [{ src: "/a.jpg", alt: null }, { src: "/b.jpg", alt: "" }] }),
+  }));
+  assert.ok(codes.includes("images-sans-alt"));
+});
+
+await testAsync("9. lien interne cassé → critique", async () => {
+  const { codes } = await auditer1(siteComplet({
+    "/": pageCorrecte({ liens: ["/services", "/page-qui-nexiste-pas"] }),
+  }));
+  assert.ok(codes.includes("lien-interne-casse"), "un 404 interne doit être signalé");
+});
+
+await testAsync("10. terme Loi Hoguet interdit → critique, sans Carte G", async () => {
+  const { r, codes } = await auditer1(siteComplet({
+    "/": pageCorrecte({ texteSup: "Nous assurons la gestion locative de votre bien et savons gérer votre annonce." }),
+  }));
+  assert.ok(codes.includes("vocabulaire-interdit"));
+  const c = r.constats.find((x) => x.code === "vocabulaire-interdit");
+  assert.equal(c.niveau, "critique");
+  assert.match(c.message, /gestion locative/);
+  assert.match(c.message, /conciergerie/, "le remplacement doit être proposé");
+  assert.ok(!/\bproposer « gestion/.test(c.message));
+});
+
+await testAsync("10 bis. avec Carte G, le vocabulaire n'est plus contrôlé", async () => {
+  const ctx = { ...CTX, carteG: true, loiHoguet: false };
+  const { codes } = await auditer1(siteComplet({
+    "/": pageCorrecte({ texteSup: "Nous assurons la gestion locative de votre bien." }),
+  }), ctx);
+  assert.ok(!codes.includes("vocabulaire-interdit"));
+  assert.ok(!codes.includes("vocabulaire-ok"));
+});
+
+await testAsync("11. sitemap absent → avertissement", async () => {
+  const routes = siteComplet();
+  delete routes["/sitemap.xml"];
+  routes["/robots.txt"] = "User-agent: *\nDisallow: /wp-admin/";
+  const { codes } = await auditer1(routes);
+  assert.ok(codes.includes("sitemap-absent"));
+});
+
+await testAsync("12. sitemap présent → point conforme", async () => {
+  const { codes } = await auditer1(siteComplet());
+  assert.ok(codes.includes("sitemap-present"));
+});
+
+await testAsync("13. robots.txt présent, absent, et bloquant", async () => {
+  const avec = await auditer1(siteComplet());
+  assert.ok(avec.codes.includes("robots-present"));
+
+  const routes = siteComplet();
+  delete routes["/robots.txt"];
+  const sans = await auditer1(routes);
+  assert.ok(sans.codes.includes("robots-absent"));
+
+  // Analyse pure du parseur : Disallow: / bloque tout.
+  const r = analyserRobots("User-agent: *\nDisallow: /");
+  assert.equal(r.bloqueTout, true);
+  assert.equal(cheminAutorise(r, "/services"), false);
+  const r2 = analyserRobots("User-agent: *\nDisallow: /wp-admin/");
+  assert.equal(cheminAutorise(r2, "/services"), true);
+  assert.equal(cheminAutorise(r2, "/wp-admin/options.php"), false);
+});
+
+await testAsync("14. timeout réseau : audit impossible, jamais d'exception", async () => {
+  const { r } = await auditer1(siteComplet(), CTX, { siteOpts: { jette: "timeout" } });
+  assert.equal(r.disponible, false);
+  assert.match(r.motif, /aucune page|impossible/i);
+  assert.equal(r.rapport, null);
+});
+
+await testAsync("15. page 404 : l'audit continue sur les autres pages", async () => {
+  const routes = siteComplet();
+  routes["/tarifs"] = { status: 404, body: "Introuvable" };
+  const { r, codes } = await auditer1(routes);
+  assert.equal(r.disponible, true, "une page en échec ne doit pas faire tomber l'audit");
+  assert.ok(r.pagesAnalysees >= 2);
+  assert.ok(codes.includes("page-inaccessible"));
+});
+
+await testAsync("16. redirection de la page d'accueil détectée", async () => {
+  const routes = siteComplet();
+  routes["/"] = { status: 200, body: pageCorrecte(), redirigeVers: "/accueil" };
+  routes["/accueil"] = pageCorrecte();
+  const { codes } = await auditer1(routes);
+  assert.ok(codes.includes("redirection-accueil"));
+});
+
+await testAsync("17. limitation au même domaine : aucun lien externe visité", async () => {
+  const { site } = await auditer1(siteComplet());
+  const externes = site.urlsVisitees.filter((u) => !u.startsWith(BASE_SITE));
+  assert.equal(externes.length, 0, "aucune requête hors du domaine : " + externes.join(", "));
+});
+
+await testAsync("18. limite maximale de pages respectée", async () => {
+  const routes = siteComplet();
+  for (let i = 0; i < 30; i++) {
+    routes["/page-" + i] = pageCorrecte({ canonical: null, liens: ["/page-" + (i + 1), "/"] });
+  }
+  routes["/"] = pageCorrecte({ liens: ["/page-0", "/services"] });
+  const { r } = await auditer1(routes, CTX, { analyse: { maxPages: 5, maxLiensVerifies: 0 } });
+  assert.ok(r.pagesAnalysees <= 5, `${r.pagesAnalysees} pages analysées alors que la limite est 5`);
+  assert.equal(r.limiteAtteinte, true);
+});
+
+await testAsync("19. JSON-LD / LocalBusiness présent puis absent", async () => {
+  const avec = await auditer1(siteComplet());
+  assert.ok(avec.codes.includes("jsonld-present"));
+  assert.ok(avec.codes.includes("localbusiness-present"));
+
+  const sans = await auditer1(siteComplet({
+    "/": pageCorrecte({ jsonLd: false }),
+    "/services": pageCorrecte({ jsonLd: false, canonical: BASE_SITE + "/services" }),
+    "/tarifs": pageCorrecte({ jsonLd: false, canonical: BASE_SITE + "/tarifs" }),
+    "/contact": pageCorrecte({ jsonLd: false, canonical: BASE_SITE + "/contact" }),
+  }));
+  assert.ok(sans.codes.includes("jsonld-absent"));
+  assert.ok(sans.codes.includes("localbusiness-absent"));
+});
+
+await testAsync("20. confidentialité : le résumé des logs ne fuit rien", async () => {
+  const { r } = await auditer1(siteComplet({
+    "/": pageCorrecte({ texteSup: "Nous assurons la gestion locative." }),
+  }));
+  const resume = resumeAnonymeAnalyse(r);
+  const json = JSON.stringify(resume);
+
+  // Ni URL, ni ville, ni zone, ni contenu de page, ni rapport.
+  for (const interdit of [BASE_SITE, "Villeneuve-Fictive", "Bourg-Imaginaire", "conciergerie", "gestion locative", "Audit SEO"]) {
+    assert.ok(!json.includes(interdit), `« ${interdit} » ne doit pas apparaître dans les logs`);
+  }
+  // Mais les compteurs utiles sont bien là.
+  assert.equal(typeof resume.pagesAnalysees, "number");
+  assert.equal(typeof resume.erreursCritiques, "number");
+  assert.ok(Array.isArray(resume.categories));
+});
+
+console.log("\n=== ANALYSE : CONTEXTE ET CONFIDENTIALITÉ ===");
+
+await testAsync("le contexte transmis ne contient AUCUNE donnée sensible", () => {
+  const ctx = verifier(ficheValide).contexte;
+  const json = JSON.stringify(ctx);
+  for (const champ of ["adminUrl", "login", "pass", "email", "google", "phone", "adresse", "files"]) {
+    assert.ok(!(champ in ctx), `le champ « ${champ} » ne doit pas être transmis à l'analyse`);
+  }
+  for (const valeur of [ficheValide.adminUrl, ficheValide.login, ficheValide.pass,
+                        ficheValide.email, ficheValide.google, ficheValide.phone, ficheValide.adresse]) {
+    assert.ok(!json.includes(valeur), "une valeur sensible fuite dans le contexte");
+  }
+});
+
+await testAsync("le contexte fournit bien ce dont l'analyse a besoin", () => {
+  const ctx = verifier(ficheValide).contexte;
+  assert.equal(ctx.url, ficheValide.url);
+  assert.equal(ctx.ville, ficheValide.ville);
+  assert.equal(ctx.zone, ficheValide.zone);
+  assert.equal(ctx.zoneConfirmee, true);
+  assert.equal(ctx.prestation, "seo_complet");
+  assert.equal(ctx.activite, "conciergerie");
+  assert.equal(ctx.carteG, true);
+  assert.equal(ctx.loiHoguet, false);
+});
+
+await testAsync("une zone non confirmée n'est jamais transmise comme base", () => {
+  const ctx = verifier({ ...ficheValide, zoneNa: true, zone: "Zone à confirmer" }).contexte;
+  assert.equal(ctx.zone, null);
+  assert.equal(ctx.zoneConfirmee, false);
+});
+
+await testAsync("sans URL publique : analyse indisponible, rien n'est tenté", async () => {
+  const r = await analyser({ ...CTX, url: null });
+  assert.equal(r.disponible, false);
+  assert.match(r.motif, /URL publique/i);
+  assert.equal(r.rapport, null);
+});
+
+await testAsync("le rapport reste exploitable et rappelle la Loi Hoguet", async () => {
+  const { r } = await auditer1(siteComplet({
+    "/": pageCorrecte({ texteSup: "Nous assurons la gestion locative." }),
+  }));
+  assert.equal(typeof r.rapport, "string");
+  assert.ok(r.rapport.includes("À CORRIGER EN PRIORITÉ"));
+  assert.ok(r.rapport.includes("RAPPELS"));
+  assert.match(r.rapport, /SANS Carte G/);
+  assert.match(r.rapport, /conciergerie/);
+});
+
+console.log("\n=== OUTILS D'ANALYSE (unitaires) ===");
+
+await testAsync("extraction HTML : title, meta, H1, alt, JSON-LD", () => {
+  const d = extraire(pageCorrecte());
+  assert.ok(d.title.includes("Villeneuve-Fictive"));
+  assert.ok(d.metaDescription.length > 50);
+  assert.equal(d.h1.length, 1);
+  assert.ok(d.h2.length >= 1);
+  assert.ok(d.nbMots > 150);
+  assert.deepEqual(typesJsonLd(d.jsonLd), ["LocalBusiness"]);
+  assert.equal(d.images.filter((i) => !i.alt).length, 0);
+});
+
+await testAsync("le texte ignore le contenu des balises script et style", () => {
+  const d = extraire('<html><head><title>T</title><style>.a{color:red}</style></head>' +
+    '<body><script>var motInterdit="gestion locative";</script><h1>Bonjour</h1></body></html>');
+  assert.ok(!d.texte.includes("gestion locative"), "le JS ne doit pas être lu comme du contenu");
+  assert.ok(!d.texte.includes("color"));
+  assert.ok(d.texte.includes("Bonjour"));
+});
+
+await testAsync("normalisation d'URL et déduplication des paramètres", () => {
+  assert.equal(normaliserUrl("exemple.invalid").href, "https://exemple.invalid/");
+  assert.equal(normaliserUrl("http://exemple.invalid/a#b").href, "http://exemple.invalid/a");
+  assert.equal(normaliserUrl(""), null);
+  assert.equal(normaliserUrl("pas-un-domaine"), null);
+  // Les paramètres ne créent pas une nouvelle page.
+  assert.equal(cleUrl("https://x.invalid/a?utm=1"), cleUrl("https://x.invalid/a"));
+  assert.equal(cleUrl("https://x.invalid/a/"), cleUrl("https://x.invalid/a"));
+});
+
+await testAsync("lecture d'un sitemap XML", () => {
+  const urls = urlsDeSitemap(SITEMAP_XML);
+  assert.equal(urls.length, 3);
+  assert.ok(urls[0].startsWith("https://"));
+  assert.deepEqual(urlsDeSitemap("<pas>du xml</pas>"), []);
+});
+
+await testAsync("le User-Agent du robot est identifiable", async () => {
+  const { site } = await auditer1(siteComplet());
+  const ua = site.requetes[0].headers["User-Agent"];
+  assert.match(ua, /GuestLuckyRobotSEO/);
+  assert.match(ua, /BUG-GL/, "l'UA doit dire qui passe");
+});
+
+await testAsync("robots.txt respecté : les chemins interdits ne sont pas visités", async () => {
+  const routes = siteComplet({
+    "/": pageCorrecte({ liens: ["/services", "/prive/secret"] }),
+    "/prive/secret": pageCorrecte(),
+  });
+  routes["/robots.txt"] = "User-agent: *\nDisallow: /prive/";
+  const { site } = await auditer1(routes, CTX, { analyse: { maxLiensVerifies: 0 } });
+  const interdits = site.urlsVisitees.filter((u) => u.includes("/prive/"));
+  assert.equal(interdits.length, 0, "le robot doit respecter Disallow");
+});
+
+await testAsync("SEO local : ville absente de l'accueil signalée", async () => {
+  const sansVille = pageCorrecte({
+    title: "Conciergerie et location courte durée",
+    h1: "Notre conciergerie",
+    description: "Service de conciergerie pour vos locations courte durée : accueil des voyageurs, ménage et suivi du linge tout au long de la saison.",
+  }).replace(/Villeneuve-Fictive/g, "Ailleurs-Ville");
+  const { codes } = await auditer1(siteComplet({ "/": sansVille }));
+  assert.ok(codes.includes("ville-absente-accueil"));
+});
+
+await testAsync("SEO local : commune de la zone jamais mentionnée signalée", async () => {
+  const ctx = { ...CTX, zone: "Villeneuve-Fictive, Commune-Jamais-Citee" };
+  const { codes } = await auditer1(siteComplet(), ctx);
+  assert.ok(codes.includes("zone-incomplete"));
+});
+
+await testAsync("contenu trop pauvre signalé", async () => {
+  const { codes } = await auditer1(siteComplet({ "/contact": pagePauvre() }));
+  assert.ok(codes.includes("contenu-pauvre"));
 });
 
 console.log(`\n${ok} test(s) réussi(s).${process.exitCode ? " ⚠️ Des tests ont échoué." : " Tout est vert."}\n`);
