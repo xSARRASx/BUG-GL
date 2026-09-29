@@ -6,7 +6,7 @@
   "allowedTestIds": [
     "-P2atEDbwnjG7JWnxhH2"
   ],
-  "analyserEnDryRun": true,
+  "analyserEnDryRun": false,
   "maxAnalysesParPassage": 2,
   "maxFichesParPassage": 5,
   "verrouPerimeMinutes": 30,
