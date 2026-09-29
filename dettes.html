@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mes dettes — Guest Lucky</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="apple-touch-icon" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css?v=29" />
+  <style>
+    /* --- Écran de connexion --- */
+    #login-form .field { margin-bottom: 14px; }
+    #login-form label {
+      display: block; font-size: 12px; color: var(--muted);
+      font-weight: 600; margin-bottom: 6px;
+    }
+    #login-form input {
+      width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--text);
+      border-radius: 10px; padding: 11px 14px; font-size: 14px; font-family: inherit;
+    }
+    #login-form input:focus { outline: none; border-color: var(--primary); }
+    .login-error {
+      color: var(--danger); font-size: 13px; font-weight: 600;
+      display: none; margin-bottom: 12px; line-height: 1.5;
+    }
+    .login-error.show { display: block; }
+    .login-note { font-size: 12px; color: var(--muted); text-align: center; margin-top: 14px; line-height: 1.5; }
+
+    /* --- Bandeau récapitulatif --- */
+    .recap {
+      margin: 0 28px 24px; display: grid; gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    }
+    .recap-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 20px;
+    }
+    .recap-card .lbl {
+      font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--muted); font-weight: 700;
+    }
+    .recap-card .val { font-size: 27px; font-weight: 800; margin-top: 6px; letter-spacing: -0.5px; }
+    .recap-card.reste { border-color: rgba(255,92,122,0.45); background: rgba(255,92,122,0.07); }
+    .recap-card.reste .val { color: #ff8095; }
+    .recap-card.paye  { border-color: rgba(46,204,143,0.45); background: rgba(46,204,143,0.07); }
+    .recap-card.paye .val { color: var(--green); }
+    .recap-card .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* --- Barre de progression --- */
+    .jauge { height: 9px; border-radius: 99px; background: rgba(154,160,189,0.16); overflow: hidden; margin-top: 10px; }
+    .jauge > span { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #2ecc8f, #23a877); transition: width .35s; }
+    .jauge.pleine > span { background: linear-gradient(90deg, #2ecc8f, #1f9d6d); }
+
+    /* --- Cartes créancier --- */
+    .dettes-liste { padding: 0 28px 40px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+    .dette-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-left: 4px solid var(--primary);
+      border-radius: var(--radius); padding: 20px;
+    }
+    .dette-card.soldee { border-left-color: var(--green); background: rgba(46,204,143,0.08); border-color: rgba(46,204,143,0.3); }
+    .dette-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .dette-nom { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; }
+    .dette-note { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+    .dette-reste { text-align: right; white-space: nowrap; }
+    .dette-reste .n { font-size: 24px; font-weight: 800; color: #ff8095; letter-spacing: -0.5px; }
+    .dette-card.soldee .dette-reste .n { color: var(--green); font-size: 19px; }
+    .dette-reste .l { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+    .dette-chiffres { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; font-size: 13px; }
+    .dette-chiffres b { display: block; font-size: 15px; font-weight: 700; margin-top: 2px; }
+    .dette-chiffres .c-lbl { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+    .dette-pct { font-size: 12px; color: var(--muted); margin-top: 7px; font-weight: 600; }
+    .dette-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+
+    /* --- Historique --- */
+    .histo { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+    .histo-titre {
+      font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted); font-weight: 700; margin-bottom: 8px;
+    }
+    .versement {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 0; font-size: 13.5px; border-bottom: 1px solid rgba(154,160,189,0.1);
+    }
+    .versement:last-child { border-bottom: none; }
+    .versement .v-date { color: var(--muted); font-size: 12.5px; min-width: 72px; }
+    .versement .v-montant { font-weight: 700; color: var(--green); min-width: 80px; }
+    .versement .v-note { flex: 1; color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .versement .v-del {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      font-size: 17px; line-height: 1; padding: 0 3px;
+    }
+    .versement .v-del:hover { color: var(--danger); }
+    .histo-vide { font-size: 13px; color: var(--muted); font-style: italic; }
+
+    .nav-back { font-size: 13px; font-weight: 600; color: var(--muted); text-decoration: none; }
+    .nav-back:hover { color: var(--text); }
+
+    .prive-banner {
+      margin: 0 28px 20px; padding: 11px 16px; font-size: 13px; line-height: 1.6;
+      background: rgba(108,92,231,0.1); border: 1px solid rgba(108,92,231,0.4);
+      border-radius: 10px; color: #c3b9ff;
+    }
+
+    @media (max-width: 700px) {
+      .recap, .dettes-liste, .prive-banner { margin-left: 14px; margin-right: 14px; padding-left: 0; padding-right: 0; }
+      .dettes-liste { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Bandeau état Firebase -->
+  <div id="status-banner" class="status-banner hidden"></div>
+
+  <!-- Écran d'erreur -->
+  <div id="access-denied" class="hidden">
+    <div class="access-screen">
+      <div class="lock-icon">⚠️</div>
+      <h2 id="access-title">Connexion impossible</h2>
+      <p id="access-text">Impossible de joindre la base de données. Les modifications sont désactivées.</p>
+      <button class="btn btn-primary" style="margin-top:8px" onclick="location.reload()">🔄 Réessayer</button>
+      <a href="index.html" class="btn btn-ghost" style="margin-top:8px">← Retour aux bugs</a>
+    </div>
+  </div>
+
+  <!-- Application -->
+  <div id="app" class="hidden">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo">💰</div>
+        <div>
+          <h1>Mes dettes</h1>
+          <p class="subtitle">Suivi personnel des remboursements</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <a href="index.html" class="nav-back">← Bugs</a>
+        <div id="me" class="me"></div>
+        <button id="btn-logout" class="btn btn-ghost" title="Se déconnecter">🔒 Déconnexion</button>
+        <button id="btn-add-creancier" class="btn btn-primary">+ Personne</button>
+      </div>
+    </header>
+
+    <div class="prive-banner">
+      🔒 <strong>Espace privé.</strong> Ces données ne sont lisibles que par ton compte —
+      ni Camille, ni personne d'autre n'y a accès, même avec le lien.
+    </div>
+
+    <section class="recap" id="recap"></section>
+
+    <main class="dettes-liste" id="liste"></main>
+
+    <div id="empty" class="empty hidden">
+      <p>Aucune dette enregistrée.</p>
+      <button class="btn btn-primary" onclick="document.getElementById('btn-add-creancier').click()">Ajouter une personne</button>
+    </div>
+  </div>
+
+  <!-- Modale : ajouter / modifier une personne -->
+  <div id="modal-creancier" class="modal-overlay hidden">
+    <div class="modal modal-small">
+      <div class="modal-head">
+        <h2 id="mc-titre">Nouvelle personne</h2>
+        <button class="modal-close" id="mc-close">&times;</button>
+      </div>
+      <form id="form-creancier" class="modal-body">
+        <input type="hidden" id="mc-id" />
+        <div class="field">
+          <label for="mc-nom">À qui je dois de l'argent *</label>
+          <input type="text" id="mc-nom" placeholder="Ex : Papa, Tom, Jules…" required />
+        </div>
+        <div class="field">
+          <label for="mc-montant">Montant total dû (€) *</label>
+          <input type="number" id="mc-montant" step="0.01" min="0" placeholder="Ex : 4600" required />
+        </div>
+        <div class="field">
+          <label for="mc-note">Note <span class="optional">(optionnel)</span></label>
+          <input type="text" id="mc-note" placeholder="Ex : prêt de janvier, voiture…" />
+        </div>
+        <div class="modal-foot">
+          <button type="button" id="mc-delete" class="btn btn-danger hidden">Supprimer</button>
+          <div class="spacer"></div>
+          <button type="button" id="mc-cancel" class="btn btn-ghost">Annuler</button>
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modale : ajouter un versement -->
+  <div id="modal-versement" class="modal-overlay hidden">
+    <div class="modal modal-small">
+      <div class="modal-head">
+        <h2 id="mv-titre">Nouveau versement</h2>
+        <button class="modal-close" id="mv-close">&times;</button>
+      </div>
+      <form id="form-versement" class="modal-body">
+        <input type="hidden" id="mv-creancier" />
+        <p class="who-intro" id="mv-contexte"></p>
+        <div class="field">
+          <label for="mv-montant">Montant versé (€) *</label>
+          <input type="number" id="mv-montant" step="0.01" min="0.01" placeholder="Ex : 200" required />
+        </div>
+        <div class="field">
+          <label for="mv-date">Date du versement *</label>
+          <input type="date" id="mv-date" required />
+        </div>
+        <div class="field">
+          <label for="mv-note">Note <span class="optional">(optionnel)</span></label>
+          <input type="text" id="mv-note" placeholder="Ex : virement, espèces…" />
+        </div>
+        <div class="modal-foot">
+          <div class="spacer"></div>
+          <button type="button" id="mv-cancel" class="btn btn-ghost">Annuler</button>
+          <button type="submit" class="btn btn-primary">Enregistrer le versement</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Écran de connexion -->
+  <div id="login-screen" class="modal-overlay hidden">
+    <div class="modal modal-small">
+      <div class="modal-head"><h2>🔒 Espace privé</h2></div>
+      <div class="modal-body">
+        <p class="who-intro">Connecte-toi avec ton adresse e-mail et ton mot de passe.</p>
+        <form id="login-form" autocomplete="on">
+          <div class="field">
+            <label for="login-email">Adresse e-mail</label>
+            <input type="email" id="login-email" placeholder="prenom@exemple.com" autocomplete="username" required />
+          </div>
+          <div class="field">
+            <label for="login-password">Mot de passe</label>
+            <input type="password" id="login-password" placeholder="Mot de passe" autocomplete="current-password" required />
+          </div>
+          <div class="login-error" id="login-error"></div>
+          <button type="submit" id="login-submit" class="btn btn-primary" style="width:100%;justify-content:center">Se connecter</button>
+        </form>
+        <p class="login-note">Cette page est strictement personnelle.</p>
+        <div style="margin-top:16px; text-align:center">
+          <a href="index.html" style="font-size:13px; color:var(--muted); text-decoration:none">← Retour aux bugs</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/firebase-config.js?v=29"></script>
+  <script src="js/dettes.js?v=29"></script>
+</body>
+</html>

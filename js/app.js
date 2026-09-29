@@ -744,6 +744,10 @@
     if (seoBtn) seoBtn.classList.toggle("hidden", !["Martin Moré", "Camille Fauveau", "Sébastien Moré", "Pierre Moré"].includes(name));
     const blogBtn = document.getElementById("btn-blog");
     if (blogBtn) blogBtn.classList.toggle("hidden", !["Martin Moré", "Pierre Moré", "Sébastien Moré", "Camille Fauveau"].includes(name));
+    // Espace privé : le bouton n'est montré qu'à Martin. La vraie
+    // protection est côté Firebase (règles sur /dettes), pas ici.
+    const dettesBtn = document.getElementById("btn-dettes");
+    if (dettesBtn) dettesBtn.classList.toggle("hidden", name !== "Martin Moré");
     if (store && store.setPresence) store.setPresence(name);
   }
 
