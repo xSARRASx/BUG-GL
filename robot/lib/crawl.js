@@ -18,12 +18,14 @@
 // =============================================================
 
 import { extraire, typesJsonLd } from "./html.js";
+import { urlAutorisee, memeSiteLegitime, RAISONS_REFUS } from "./reseau.js";
 
 export const USER_AGENT =
   "GuestLuckyRobotSEO/1.0 (+https://xsarrasx.github.io/BUG-GL/ ; audit SEO en lecture seule)";
 
 export const DEFAUTS = {
   maxPages: 15,
+  maxRedirections: 3,
   maxLiensVerifies: 10,   // liens internes non explorés, vérifiés en plus
   timeoutMs: 10000,
   budgetMs: 60000,
@@ -41,7 +43,10 @@ export function normaliserUrl(brut) {
   try {
     const u = new URL(avecSchema);
     if (!/^https?:$/.test(u.protocol)) return null;
-    if (!u.hostname.includes(".")) return null;
+    // On ne juge PAS ici si l'hôte est légitime : c'est le rôle de
+    // lib/reseau.js. Rejeter « localhost » dès ici donnerait un message
+    // d'erreur trompeur (« URL invalide ») au lieu du vrai motif de refus.
+    if (!u.hostname) return null;
     u.hash = "";
     return u;
   } catch {
@@ -62,11 +67,6 @@ export function cleUrl(u) {
     return String(u || "").toLowerCase();
   }
 }
-
-const memeOrigine = (u, origine) => {
-  try { return (typeof u === "string" ? new URL(u) : u).origin === origine; }
-  catch { return false; }
-};
 
 /** Extensions qu'il est inutile de crawler comme des pages. */
 const EXT_IGNOREES = /\.(pdf|jpe?g|png|gif|webp|svg|ico|css|js|zip|rar|mp4|mp3|avi|docx?|xlsx?|pptx?)$/i;
@@ -146,30 +146,99 @@ export function creerCrawler(options = {}) {
 
   const debut = Date.now();
   const budgetEpuise = () => Date.now() - debut > cfg.budgetMs;
+  const resolveur = options.resolveur;   // injectable ; absent = contrôle du nom seul
 
-  /** Une requête, avec timeout. Ne lève jamais : renvoie un objet d'échec. */
-  async function recuperer(url, methode = "GET") {
-    if (budgetEpuise()) return { ok: false, motif: "budget-epuise", url };
+  // Origine de référence du site audité. Tout ce qui n'en relève pas
+  // est refusé — y compris au milieu d'une chaîne de redirections.
+  let origineReference = null;
 
+  /** Une URL a-t-elle le droit d'être contactée ? Deux contrôles cumulés. */
+  async function contactAutorise(url) {
+    // 1. Garde-fou réseau : jamais d'hôte local, privé ou de métadonnées.
+    const verdict = await urlAutorisee(url, { resolveur });
+    if (!verdict.ok) return verdict;
+
+    // 2. Périmètre : le même site, à une variante légitime près.
+    if (origineReference && !memeSiteLegitime(url, origineReference)) {
+      return { ok: false, raison: "hors-perimetre" };
+    }
+    return { ok: true };
+  }
+
+  /** Une seule requête HTTP, sans suivre les redirections. */
+  async function requeteBrute(url, methode) {
     const controleur = typeof AbortController === "function" ? new AbortController() : null;
     const minuteur = controleur ? setTimeout(() => controleur.abort(), cfg.timeoutMs) : null;
-
     try {
       const rep = await http(url, {
         method: methode,
-        redirect: "follow",
-        headers: { "User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+        // ⚠️ JAMAIS "follow" : une redirection doit repasser par nos
+        // contrôles avant d'être suivie. C'est ce qui empêche une URL
+        // du domaine client d'emmener le robot ailleurs.
+        redirect: "manual",
+        headers: {
+          "User-Agent": USER_AGENT,
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
         signal: controleur ? controleur.signal : undefined,
       });
-      const finale = rep.url || url;
-      if (!rep.ok) return { ok: false, motif: "http", status: rep.status, url, urlFinale: finale };
-      const corps = methode === "HEAD" ? "" : await rep.text();
-      return { ok: true, status: rep.status, url, urlFinale: finale, corps };
+      return { rep };
     } catch (e) {
       const motif = e && (e.name === "AbortError" || /abort/i.test(e.message || "")) ? "timeout" : "reseau";
-      return { ok: false, motif, url };
+      return { erreur: motif };
     } finally {
       if (minuteur) clearTimeout(minuteur);
+    }
+  }
+
+  const EST_REDIRECTION = (s) => s === 301 || s === 302 || s === 303 || s === 307 || s === 308;
+
+  /**
+   * Requête avec redirections suivies À LA MAIN.
+   * Chaque saut est revalidé : garde-fou réseau + périmètre du site.
+   * Ne lève jamais : renvoie un objet d'échec.
+   */
+  async function recuperer(urlDemandee, methode = "GET") {
+    if (budgetEpuise()) return { ok: false, motif: "budget-epuise", url: urlDemandee };
+
+    // Contrôle AVANT la toute première requête : aucune URL interdite
+    // ne doit être contactée, même une seule fois.
+    const permis = await contactAutorise(urlDemandee);
+    if (!permis.ok) {
+      return { ok: false, motif: "refuse", raison: permis.raison, url: urlDemandee };
+    }
+
+    let url = String(urlDemandee);
+    let redirections = 0;
+
+    while (true) {
+      if (budgetEpuise()) return { ok: false, motif: "budget-epuise", url };
+
+      const { rep, erreur } = await requeteBrute(url, methode);
+      if (erreur) return { ok: false, motif: erreur, url };
+
+      if (EST_REDIRECTION(rep.status)) {
+        if (++redirections > cfg.maxRedirections) {
+          return { ok: false, motif: "trop-de-redirections", url };
+        }
+        const cible = rep.headers && typeof rep.headers.get === "function" ? rep.headers.get("location") : null;
+        if (!cible) return { ok: false, motif: "redirection-sans-cible", url };
+
+        let suivante;
+        try { suivante = new URL(cible, url).href; } catch { return { ok: false, motif: "redirection-invalide", url }; }
+
+        // Chaque saut est revalidé : c'est ici que se joue la sécurité.
+        const okSaut = await contactAutorise(suivante);
+        if (!okSaut.ok) {
+          return { ok: false, motif: "redirection-refusee", raison: okSaut.raison, url, cible: suivante };
+        }
+        url = suivante;
+        continue;
+      }
+
+      if (!rep.ok) return { ok: false, motif: "http", status: rep.status, url: urlDemandee, urlFinale: url };
+      const corps = methode === "HEAD" ? "" : await rep.text();
+      return { ok: true, status: rep.status, url: urlDemandee, urlFinale: url, corps };
     }
   }
 
@@ -181,6 +250,16 @@ export function creerCrawler(options = {}) {
   async function explorer(urlPublique) {
     const depart = normaliserUrl(urlPublique);
     if (!depart) return { ok: false, motif: "url-invalide", pages: [] };
+
+    // Origine de référence : tout le reste de l'exploration s'y
+    // rapporte, y compris les redirections et les sitemaps.
+    origineReference = depart.origin;
+
+    // L'URL de départ elle-même doit passer le garde-fou réseau.
+    const departPermis = await urlAutorisee(depart, { resolveur });
+    if (!departPermis.ok) {
+      return { ok: false, motif: "url-refusee", raison: departPermis.raison, pages: [] };
+    }
 
     const origine = depart.origin;
     const resultat = {
@@ -204,11 +283,17 @@ export function creerCrawler(options = {}) {
     }
 
     // --- 2. sitemap ---
+    // ⚠️ Un robots.txt peut déclarer un sitemap sur un AUTRE domaine.
+    // On les filtre AVANT toute requête : aucune URL externe ne doit
+    // être contactée, même une seule fois.
     const candidats = [
-      ...resultat.robotsTxt.sitemaps,
+      ...resultat.robotsTxt.sitemaps.filter((u) => memeSiteLegitime(u, origine)),
       origine + "/sitemap.xml",
       origine + "/sitemap_index.xml",
     ];
+    resultat.sitemapsExternesIgnores = resultat.robotsTxt.sitemaps
+      .filter((u) => !memeSiteLegitime(u, origine)).length;
+
     for (const candidat of candidats) {
       if (resultat.sitemap.present || budgetEpuise()) break;
       const r = await recuperer(candidat);
@@ -216,11 +301,20 @@ export function creerCrawler(options = {}) {
 
       let urls = urlsDeSitemap(r.corps);
       if (estIndexSitemap(r.corps) && urls.length) {
-        // Index : on ouvre le premier sous-sitemap, pas tous.
-        const sous = await recuperer(urls[0]);
-        urls = sous.ok ? urlsDeSitemap(sous.corps) : [];
+        // Index : on ouvre le premier sous-sitemap DU MÊME SITE, pas tous.
+        const interne = urls.find((u) => memeSiteLegitime(u, origine));
+        if (interne) {
+          const sous = await recuperer(interne);
+          urls = sous.ok ? urlsDeSitemap(sous.corps) : [];
+        } else {
+          urls = [];
+        }
       }
-      resultat.sitemap = { present: true, source: candidat, urls: urls.filter((u) => memeOrigine(u, origine)) };
+      resultat.sitemap = {
+        present: true,
+        source: candidat,
+        urls: urls.filter((u) => memeSiteLegitime(u, origine)),
+      };
     }
 
     // --- 3. File d'attente ---
@@ -228,7 +322,7 @@ export function creerCrawler(options = {}) {
     const file = [];
     const ajouter = (u) => {
       const url = typeof u === "string" ? normaliserUrl(u) : u;
-      if (!url || !memeOrigine(url, origine)) return;
+      if (!url || !memeSiteLegitime(url, origine)) return;
       if (EXT_IGNOREES.test(url.pathname)) return;
       const cle = cleUrl(url);
       if (vus.has(cle)) return;
@@ -272,7 +366,7 @@ export function creerCrawler(options = {}) {
         if (/^(mailto:|tel:|javascript:|#)/i.test(href)) continue;
         let abs;
         try { abs = new URL(href, r.urlFinale); } catch { continue; }
-        if (!memeOrigine(abs, origine)) continue;   // jamais de lien externe
+        if (!memeSiteLegitime(abs, origine)) continue;   // jamais de lien externe
         if (EXT_IGNOREES.test(abs.pathname)) continue;
         abs.hash = "";
         if (!liensRencontres.has(cleUrl(abs))) liensRencontres.set(cleUrl(abs), { url: abs, depuis: url.href });

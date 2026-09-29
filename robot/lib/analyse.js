@@ -22,6 +22,7 @@
 // =============================================================
 
 import { creerCrawler, DEFAUTS } from "./crawl.js";
+import { resolveurSysteme, RAISONS_REFUS } from "./reseau.js";
 import { auditer, NIVEAUX, REMPLACEMENTS_HOGUET } from "./audit.js";
 
 const LABEL_PRESTATION = {
@@ -140,8 +141,12 @@ export async function analyser(contexte = {}, options = {}) {
   }
 
   // ?? et non || : 0 est une valeur volontaire (« ne vérifie aucun lien »).
+  //
+  // Le resolveur DNS n'est branché que hors tests : il permet de
+  // refuser un domaine public qui pointerait vers une IP privée.
   const crawler = creerCrawler({
     fetchImpl: options.fetchImpl,
+    resolveur: options.resolveur ?? (options.fetchImpl ? undefined : resolveurSysteme),
     maxPages: options.maxPages ?? DEFAUTS.maxPages,
     timeoutMs: options.timeoutMs ?? DEFAUTS.timeoutMs,
     budgetMs: options.budgetMs ?? DEFAUTS.budgetMs,
@@ -157,6 +162,20 @@ export async function analyser(contexte = {}, options = {}) {
   }
 
   if (!crawl.ok) {
+    if (crawl.motif === "url-refusee") {
+      const details = {
+        [RAISONS_REFUS.HOTE_LOCAL]: "l'adresse désigne un hôte local ou interne",
+        [RAISONS_REFUS.IP_PRIVEE]: "l'adresse pointe vers une IP privée, non publique",
+        [RAISONS_REFUS.METADONNEES_CLOUD]: "l'adresse vise un service de métadonnées cloud",
+        [RAISONS_REFUS.PROTOCOLE]: "le protocole n'est ni http ni https",
+        [RAISONS_REFUS.DNS]: "le domaine n'a pas pu être résolu",
+      };
+      return {
+        disponible: false,
+        motif: `URL refusée par le garde-fou réseau : ${details[crawl.raison] || crawl.raison}.`,
+        rapport: null,
+      };
+    }
     return { disponible: false, motif: "URL publique invalide ou inexploitable.", rapport: null };
   }
 

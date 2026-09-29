@@ -6,7 +6,7 @@
   "allowedTestIds": [
     "-P2atEDbwnjG7JWnxhH2"
   ],
-  "analyserEnDryRun": false,
+  "analyserEnDryRun": true,
   "maxAnalysesParPassage": 2,
   "maxFichesParPassage": 5,
   "verrouPerimeMinutes": 30,
@@ -19,6 +19,8 @@
     "maxFichesParPassage": "Limite le nombre de fiches TRAITEES par execution en mode actif. En dry-run, toutes les fiches 'afaire' sont examinees, puisque rien n'est ecrit.",
     "verrouPerimeMinutes": "Au-dela de ce delai sans battement de coeur, un verrou est considere comme abandonne.",
     "analyserEnDryRun": "true = le robot audite reellement les sites publics des fiches 'afaire', meme en dry-run. C'est une LECTURE SEULE : aucune ecriture Firebase, aucune modification du site, aucun identifiant WordPress utilise. Passer a false pour ne plus visiter les sites clients du tout.",
-    "maxAnalysesParPassage": "Nombre maximum de sites audites par execution. Le robot tourne toutes les 15 minutes : sans cette limite, il visiterait chaque site client 96 fois par jour, ce qui serait excessif."
-  }
+    "maxAnalysesParPassage": "Nombre maximum de sites audites par execution. Le robot tourne toutes les 15 minutes : sans cette limite, il visiterait chaque site client 96 fois par jour, ce qui serait excessif.",
+    "maxRedirections": "Nombre maximum de redirections suivies. Chaque saut est revalide : jamais vers un domaine tiers, ni vers un hote local ou prive."
+  },
+  "maxRedirections": 3
 }

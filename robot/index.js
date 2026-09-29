@@ -22,6 +22,7 @@ import { log, erreurLisible, enregistrerSecret } from "./lib/log.js";
 import { connecter, deconnecter, ConfigurationManquante } from "./lib/firebase.js";
 import { listerAFaire } from "./lib/detect.js";
 import { verifier } from "./lib/validate.js";
+import { selectionnerPourAudit, passagesPourToutCouvrir, creneauActuel } from "./lib/rotation.js";
 import { resumeAnonyme, valeursSensiblesDe } from "./lib/redact.js";
 import { analyser, resumeAnonymeAnalyse } from "./lib/analyse.js";
 
@@ -276,7 +277,7 @@ async function main() {
     }
 
     log.titre("VÉRIFICATION");
-    let analysesFaites = 0;
+    const candidatsAudit = [];
     const bilan = { traitables: 0, bloquees: 0, horsListe: 0, collisions: 0, echecs: 0, pretes: 0,
                     analyseIndispo: 0, auditees: 0, auditsImpossibles: 0 };
 
@@ -316,14 +317,11 @@ async function main() {
 
       if (dryRun) {
         log.info("   [DRY-RUN] Aucune réservation, aucune écriture.");
-        // L'analyse publique est en LECTURE SEULE : elle peut donc tourner
-        // en dry-run sans risque. Elle ne touche ni Firebase, ni le site.
-        if (config.analyserEnDryRun && analysesFaites < config.maxAnalysesParPassage) {
-          analysesFaites++;
-          await analyserEtJournaliser(controle.contexte, bilan);
-        } else if (config.analyserEnDryRun) {
-          log.ignore(`   Analyse non lancée : limite de ${config.maxAnalysesParPassage} par passage atteinte.`);
-        }
+        // La sélection des sites à auditer se fait APRÈS la boucle :
+        // il faut connaître toutes les fiches traitables pour que la
+        // rotation soit équitable. Une fiche bloquée ne consomme donc
+        // jamais une place d'audit.
+        candidatsAudit.push({ cle: fiche._cle, contexte: controle.contexte });
         continue;
       }
 
@@ -348,6 +346,31 @@ async function main() {
       else if (issue === "pret_a_valider") bilan.pretes++;
       else if (issue === "analyse_indisponible") bilan.analyseIndispo++;
       else bilan.echecs++;
+    }
+
+    // ---------------------------------------------------------
+    //  Audit public, en rotation — LECTURE SEULE
+    // ---------------------------------------------------------
+    if (dryRun && config.analyserEnDryRun && candidatsAudit.length) {
+      log.titre("AUDIT PUBLIC (lecture seule)");
+
+      const creneau = creneauActuel();
+      const choisies = selectionnerPourAudit(candidatsAudit, config.maxAnalysesParPassage, creneau);
+      const passages = passagesPourToutCouvrir(candidatsAudit.length, config.maxAnalysesParPassage);
+
+      log.info(`${candidatsAudit.length} fiche(s) traitable(s), ${choisies.length} auditée(s) ce passage.`);
+      if (passages > 1) {
+        log.info(`Rotation : toutes seront couvertes en ${passages} passages (~${passages * 15} min).`);
+      }
+
+      for (const candidat of choisies) {
+        log.info("");
+        log.etape(`Audit de ${candidat.cle}`);
+        await analyserEtJournaliser(candidat.contexte, bilan);
+      }
+    } else if (dryRun && !config.analyserEnDryRun && candidatsAudit.length) {
+      log.info("");
+      log.ignore(`Audit public désactivé (analyserEnDryRun = false) : aucun site n'a été visité.`);
     }
 
     log.titre("BILAN");

@@ -99,29 +99,48 @@ export function creerFauxSite(routes = {}, opts = {}) {
     let u;
     try { u = new URL(String(url)); } catch { throw new TypeError("URL invalide"); }
 
-    // Hors du domaine fictif : le crawler ne devrait jamais arriver ici.
-    if (u.origin !== base) {
-      return { ok: false, status: 599, url: String(url), text: async () => "" };
+    // Hors du ou des domaines fictifs : le crawler ne devrait jamais
+    // arriver ici. Toute requête reçue ici est une fuite de périmètre.
+    const origines = [base, ...(opts.originesSupplementaires || [])];
+    if (!origines.includes(u.origin)) {
+      return { ok: false, status: 599, url: String(url), headers: { get: () => null }, text: async () => "" };
     }
 
     const chemin = u.pathname.replace(/\/+$/, "") || "/";
-    const route = routes[chemin];
+    // Une clé « https://origine/chemin » l'emporte sur la clé « /chemin ».
+    // Permet de servir un contenu différent selon l'origine (www, http…).
+    const route = routes[u.origin + chemin] ?? routes[chemin];
 
     if (route === undefined) {
-      return { ok: false, status: 404, url: String(url), text: async () => "Introuvable" };
+      return { ok: false, status: 404, url: String(url), headers: { get: () => null }, text: async () => "Introuvable" };
     }
 
     if (typeof route === "object" && route !== null) {
       const status = route.status || 200;
+      // « redirigeVers » produit une VRAIE redirection HTTP : le crawler
+      // doit la suivre lui-même, en repassant par ses contrôles.
+      if (route.redirigeVers) {
+        const cible = /^https?:\/\//i.test(route.redirigeVers)
+          ? route.redirigeVers
+          : base + route.redirigeVers;
+        return {
+          ok: false,
+          status: route.status || 301,
+          url: String(url),
+          headers: { get: (n) => (String(n).toLowerCase() === "location" ? cible : null) },
+          text: async () => "",
+        };
+      }
       return {
         ok: status >= 200 && status < 300,
         status,
-        url: route.redirigeVers ? base + route.redirigeVers : String(url),
+        url: String(url),
+        headers: { get: () => null },
         text: async () => route.body || "",
       };
     }
 
-    return { ok: true, status: 200, url: String(url), text: async () => route };
+    return { ok: true, status: 200, url: String(url), headers: { get: () => null }, text: async () => route };
   };
 
   return {

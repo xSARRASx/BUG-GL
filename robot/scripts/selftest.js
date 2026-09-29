@@ -29,6 +29,8 @@ import { verifier } from "../lib/validate.js";
 import { extraire, typesJsonLd } from "../lib/html.js";
 import { normaliserUrl, cleUrl, analyserRobots, cheminAutorise, urlsDeSitemap } from "../lib/crawl.js";
 import { creerFauxSite, pageCorrecte, pagePauvre, SITEMAP_XML, ROBOTS_TXT, BASE as BASE_SITE } from "./fauxsite.js";
+import { selectionnerPourAudit, passagesPourToutCouvrir, creneauActuel, DUREE_CRENEAU_MS } from "../lib/rotation.js";
+import { urlAutorisee, hoteAutorise, ipv4Privee, ipv6Privee, memeSiteLegitime, RAISONS_REFUS } from "../lib/reseau.js";
 import { creerFauxOps } from "./fauxops.js";
 
 const CLE = "-P2atEDbwnjG7JWnxhH2";
@@ -1053,7 +1055,7 @@ await testAsync("15. page 404 : l'audit continue sur les autres pages", async ()
 
 await testAsync("16. redirection de la page d'accueil détectée", async () => {
   const routes = siteComplet();
-  routes["/"] = { status: 200, body: pageCorrecte(), redirigeVers: "/accueil" };
+  routes["/"] = { status: 301, redirigeVers: "/accueil" };   // vraie redirection HTTP
   routes["/accueil"] = pageCorrecte();
   const { codes } = await auditer1(routes);
   assert.ok(codes.includes("redirection-accueil"));
@@ -1183,7 +1185,9 @@ await testAsync("normalisation d'URL et déduplication des paramètres", () => {
   assert.equal(normaliserUrl("exemple.invalid").href, "https://exemple.invalid/");
   assert.equal(normaliserUrl("http://exemple.invalid/a#b").href, "http://exemple.invalid/a");
   assert.equal(normaliserUrl(""), null);
-  assert.equal(normaliserUrl("pas-un-domaine"), null);
+  // normaliserUrl ne juge que la syntaxe : c'est le garde-fou réseau
+  // qui refuse un hôte sans domaine public.
+  assert.equal(hoteAutorise("pas-un-domaine").ok, false);
   // Les paramètres ne créent pas une nouvelle page.
   assert.equal(cleUrl("https://x.invalid/a?utm=1"), cleUrl("https://x.invalid/a"));
   assert.equal(cleUrl("https://x.invalid/a/"), cleUrl("https://x.invalid/a"));
@@ -1233,6 +1237,268 @@ await testAsync("SEO local : commune de la zone jamais mentionnée signalée", a
 await testAsync("contenu trop pauvre signalé", async () => {
   const { codes } = await auditer1(siteComplet({ "/contact": pagePauvre() }));
   assert.ok(codes.includes("contenu-pauvre"));
+});
+
+
+console.log("\n=== ROTATION DES AUDITS (round-robin) ===");
+
+await testAsync("6 fiches, limite 2 : toutes couvertes en 3 passages", () => {
+  const fiches = ["f1", "f2", "f3", "f4", "f5", "f6"];
+  const vues = new Set();
+  for (let i = 0; i < 3; i++) {
+    const lot = selectionnerPourAudit(fiches, 2, 100 + i);
+    assert.equal(lot.length, 2, `passage ${i} : 2 fiches attendues`);
+    lot.forEach((f) => vues.add(f));
+  }
+  assert.equal(vues.size, 6, "les 6 fiches doivent avoir été auditées : " + [...vues].join(", "));
+  assert.equal(passagesPourToutCouvrir(6, 2), 3);
+});
+
+await testAsync("la fenêtre avance bien d'un lot à chaque créneau", () => {
+  const f = ["a", "b", "c", "d", "e", "f"];
+  assert.deepEqual(selectionnerPourAudit(f, 2, 0), ["a", "b"]);
+  assert.deepEqual(selectionnerPourAudit(f, 2, 1), ["c", "d"]);
+  assert.deepEqual(selectionnerPourAudit(f, 2, 2), ["e", "f"]);
+  assert.deepEqual(selectionnerPourAudit(f, 2, 3), ["a", "b"], "et ça reboucle");
+});
+
+await testAsync("déterministe : même créneau → même sélection", () => {
+  const f = ["a", "b", "c", "d", "e"];
+  assert.deepEqual(selectionnerPourAudit(f, 2, 42), selectionnerPourAudit(f, 2, 42));
+});
+
+await testAsync("aucune fiche oubliée, quelles que soient les tailles", () => {
+  for (const n of [1, 2, 3, 5, 6, 7, 11, 20]) {
+    for (const max of [1, 2, 3, 5]) {
+      const fiches = Array.from({ length: n }, (_, i) => "f" + i);
+      const vues = new Set();
+      const passages = passagesPourToutCouvrir(n, max);
+      for (let i = 0; i < passages; i++) {
+        selectionnerPourAudit(fiches, max, i).forEach((f) => vues.add(f));
+      }
+      assert.equal(vues.size, n, `${n} fiches / max ${max} : ${vues.size} couvertes en ${passages} passages`);
+    }
+  }
+});
+
+await testAsync("cas limites : liste vide, max 0, liste plus courte que max", () => {
+  assert.deepEqual(selectionnerPourAudit([], 2, 0), []);
+  assert.deepEqual(selectionnerPourAudit(["a"], 0, 0), []);
+  assert.deepEqual(selectionnerPourAudit(["a", "b"], 5, 0), ["a", "b"]);
+  assert.deepEqual(selectionnerPourAudit(null, 2, 0), []);
+});
+
+await testAsync("un créneau négatif ou énorme reste dans les bornes", () => {
+  const f = ["a", "b", "c", "d"];
+  assert.equal(selectionnerPourAudit(f, 2, -1).length, 2);
+  assert.equal(selectionnerPourAudit(f, 2, 999999).length, 2);
+});
+
+await testAsync("le créneau change toutes les 15 minutes", () => {
+  // Timestamp aligné sur un début de créneau, sinon le test ne prouve rien.
+  const t = Math.floor(1790000000000 / DUREE_CRENEAU_MS) * DUREE_CRENEAU_MS;
+  assert.equal(creneauActuel(t), creneauActuel(t + DUREE_CRENEAU_MS - 1), "même tranche");
+  assert.equal(creneauActuel(t + DUREE_CRENEAU_MS), creneauActuel(t) + 1, "tranche suivante");
+});
+
+console.log("\n=== PÉRIMÈTRE RÉSEAU : MÊME SITE UNIQUEMENT ===");
+
+const SITE_A = "https://exemple-fictif.invalid";
+const EXTERNE = "https://site-externe.invalid";
+
+await testAsync("memeSiteLegitime : variantes acceptées, reste refusé", () => {
+  assert.equal(memeSiteLegitime("https://a.invalid/x", "https://a.invalid"), true);
+  assert.equal(memeSiteLegitime("http://a.invalid/x", "https://a.invalid"), true, "http↔https du même site");
+  assert.equal(memeSiteLegitime("https://www.a.invalid/x", "https://a.invalid"), true, "variante www");
+  assert.equal(memeSiteLegitime("https://a.invalid/x", "https://www.a.invalid"), true, "et l'inverse");
+  assert.equal(memeSiteLegitime("https://autre.invalid/x", "https://a.invalid"), false);
+  assert.equal(memeSiteLegitime("https://sous.a.invalid/x", "https://a.invalid"), false, "un sous-domaine est un autre hôte");
+  assert.equal(memeSiteLegitime("https://a.invalid:8443/x", "https://a.invalid"), false, "autre port");
+  assert.equal(memeSiteLegitime("pas-une-url", "https://a.invalid"), false);
+});
+
+await testAsync("lien externe → aucune requête émise", async () => {
+  const site = creerFauxSite({
+    "/": pageCorrecte({ liens: ["/services", EXTERNE + "/piege"] }),
+    "/services": pageCorrecte({ canonical: SITE_A + "/services", liens: ["/"] }),
+    "/robots.txt": ROBOTS_TXT,
+  });
+  await analyser(CTX, { fetchImpl: site.fetchImpl, maxLiensVerifies: 5 });
+  const fuites = site.urlsVisitees.filter((u) => !u.startsWith(SITE_A));
+  assert.equal(fuites.length, 0, "requêtes hors périmètre : " + fuites.join(", "));
+});
+
+await testAsync("sitemap externe déclaré dans robots.txt → aucune requête", async () => {
+  const site = creerFauxSite({
+    "/": pageCorrecte({ liens: ["/"] }),
+    "/robots.txt": `User-agent: *\nSitemap: ${EXTERNE}/sitemap.xml`,
+  });
+  await analyser(CTX, { fetchImpl: site.fetchImpl, maxLiensVerifies: 0 });
+  const fuites = site.urlsVisitees.filter((u) => !u.startsWith(SITE_A));
+  assert.equal(fuites.length, 0, "le sitemap externe ne doit JAMAIS être requêté : " + fuites.join(", "));
+});
+
+await testAsync("sous-sitemap externe dans un sitemapindex → aucune requête", async () => {
+  const site = creerFauxSite({
+    "/": pageCorrecte({ liens: ["/"] }),
+    "/robots.txt": "User-agent: *\nDisallow:",
+    "/sitemap.xml": `<?xml version="1.0"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <sitemap><loc>${EXTERNE}/sitemap-1.xml</loc></sitemap></sitemapindex>`,
+  });
+  await analyser(CTX, { fetchImpl: site.fetchImpl, maxLiensVerifies: 0 });
+  const fuites = site.urlsVisitees.filter((u) => !u.startsWith(SITE_A));
+  assert.equal(fuites.length, 0, "le sous-sitemap externe ne doit pas être ouvert : " + fuites.join(", "));
+});
+
+await testAsync("redirection vers un domaine externe → non suivie", async () => {
+  const site = creerFauxSite({
+    "/": { status: 302, redirigeVers: EXTERNE + "/ailleurs" },
+    "/robots.txt": "User-agent: *\nDisallow:",
+  }, { originesSupplementaires: [EXTERNE] });
+
+  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, maxLiensVerifies: 0 });
+  const fuites = site.urlsVisitees.filter((u) => u.startsWith(EXTERNE));
+  assert.equal(fuites.length, 0, "la redirection externe ne doit pas être suivie : " + fuites.join(", "));
+  assert.equal(r.disponible, false, "sans page accessible, l'audit est indisponible");
+});
+
+await testAsync("redirection HTTP → HTTPS du même site : correctement suivie", async () => {
+  const siteHttp = "http://exemple-fictif.invalid";
+  const site = creerFauxSite({
+    "/": pageCorrecte(),
+    "/robots.txt": "User-agent: *\nDisallow:",
+  }, { base: SITE_A, originesSupplementaires: [siteHttp] });
+
+  // Le faux serveur répond sur les deux origines ; on part en http.
+  const r = await analyser({ ...CTX, url: siteHttp + "/" }, { fetchImpl: site.fetchImpl, maxLiensVerifies: 0 });
+  assert.equal(r.disponible, true, "le même site en http doit rester analysable");
+});
+
+await testAsync("variante www légitime : correctement gérée", async () => {
+  const www = "https://www.exemple-fictif.invalid";
+  const site = creerFauxSite({
+    "/": { status: 301, redirigeVers: www + "/" },   // le nu redirige vers www
+    [www + "/"]: pageCorrecte(),                     // et www sert la vraie page
+    [www + "/robots.txt"]: "User-agent: *\nDisallow:",
+    "/robots.txt": "User-agent: *\nDisallow:",
+  }, { originesSupplementaires: [www] });
+
+  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, maxLiensVerifies: 0 });
+  const visitesWww = site.urlsVisitees.filter((u) => u.startsWith(www));
+  assert.ok(visitesWww.length > 0, "la redirection vers www doit être suivie");
+  assert.equal(r.disponible, true);
+});
+
+await testAsync("chaîne de redirections trop longue : abandon propre", async () => {
+  const routes = { "/robots.txt": "User-agent: *\nDisallow:" };
+  for (let i = 0; i < 10; i++) routes["/r" + i] = { status: 302, redirigeVers: "/r" + (i + 1) };
+  routes["/"] = { status: 302, redirigeVers: "/r0" };
+  const site = creerFauxSite(routes);
+  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, maxLiensVerifies: 0 });
+  assert.equal(r.disponible, false);
+  assert.ok(site.urlsVisitees.length < 20, "la chaîne doit être coupée court");
+});
+
+console.log("\n=== GARDE-FOU ANTI-SSRF (hôtes locaux et privés) ===");
+
+await testAsync("IPv4 privées, loopback, link-local et réservées refusées", () => {
+  for (const ip of ["127.0.0.1", "127.1.2.3", "0.0.0.0", "10.0.0.5", "172.16.0.1",
+                    "172.31.255.255", "192.168.1.1", "169.254.169.254", "100.64.0.1",
+                    "192.0.0.1", "198.18.0.1", "224.0.0.1"]) {
+    assert.equal(ipv4Privee(ip), true, `${ip} doit être refusée`);
+  }
+});
+
+await testAsync("IPv4 publiques acceptées", () => {
+  for (const ip of ["8.8.8.8", "1.1.1.1", "51.15.1.1", "172.32.0.1", "192.167.1.1", "99.99.99.99"]) {
+    assert.equal(ipv4Privee(ip), false, `${ip} devrait être acceptée`);
+  }
+});
+
+await testAsync("IPv6 loopback, link-local et ULA refusées", () => {
+  for (const ip of ["::1", "::", "fe80::1", "fc00::1", "fd12:3456::1", "ff02::1", "::ffff:127.0.0.1"]) {
+    assert.equal(ipv6Privee(ip), true, `${ip} doit être refusée`);
+  }
+  assert.equal(ipv6Privee("2001:4860:4860::8888"), false, "une IPv6 publique est acceptée");
+});
+
+await testAsync("noms d'hôtes locaux et internes refusés", () => {
+  for (const h of ["localhost", "LOCALHOST", "monserveur.local", "api.internal",
+                   "truc.intranet", "machine.localdomain", "routeur.home.arpa",
+                   "metadata.google.internal", "instance-data", "serveur"]) {
+    const v = hoteAutorise(h);
+    assert.equal(v.ok, false, `« ${h} » doit être refusé`);
+  }
+  assert.equal(hoteAutorise("exemple-fictif.invalid").ok, true);
+  assert.equal(hoteAutorise("www.site-client.fr").ok, true);
+});
+
+await testAsync("adresses de métadonnées cloud refusées explicitement", async () => {
+  for (const h of ["169.254.169.254", "metadata.google.internal", "100.100.100.200"]) {
+    const v = await urlAutorisee("http://" + h + "/latest/meta-data/");
+    assert.equal(v.ok, false, `${h} doit être refusé`);
+    assert.ok([RAISONS_REFUS.METADONNEES_CLOUD, RAISONS_REFUS.HOTE_LOCAL, RAISONS_REFUS.IP_PRIVEE].includes(v.raison));
+  }
+});
+
+await testAsync("protocoles autres que http/https refusés", async () => {
+  for (const u of ["file:///etc/passwd", "ftp://exemple.fr/x", "gopher://exemple.fr"]) {
+    const v = await urlAutorisee(u);
+    assert.equal(v.ok, false, `${u} doit être refusé`);
+  }
+});
+
+await testAsync("un domaine public résolvant vers une IP privée est refusé", async () => {
+  // Cas classique de contournement : le nom est public, le DNS pointe ailleurs.
+  const resolveurPiege = async () => ["192.168.1.50"];
+  const v = await urlAutorisee("https://site-client.fr/", { resolveur: resolveurPiege });
+  assert.equal(v.ok, false);
+  assert.equal(v.raison, RAISONS_REFUS.IP_PRIVEE);
+});
+
+await testAsync("un domaine résolvant vers une IP publique est accepté", async () => {
+  const v = await urlAutorisee("https://site-client.fr/", { resolveur: async () => ["93.184.216.34"] });
+  assert.equal(v.ok, true);
+});
+
+await testAsync("si une SEULE adresse est privée, tout est refusé", async () => {
+  const v = await urlAutorisee("https://site-client.fr/", {
+    resolveur: async () => ["93.184.216.34", "10.0.0.1"],
+  });
+  assert.equal(v.ok, false, "une seule IP privée suffit à refuser");
+  assert.equal(v.raison, RAISONS_REFUS.IP_PRIVEE);
+});
+
+await testAsync("une résolution DNS impossible refuse l'URL", async () => {
+  const v1 = await urlAutorisee("https://site-client.fr/", { resolveur: async () => { throw new Error("NXDOMAIN"); } });
+  assert.equal(v1.ok, false);
+  assert.equal(v1.raison, RAISONS_REFUS.DNS);
+  const v2 = await urlAutorisee("https://site-client.fr/", { resolveur: async () => [] });
+  assert.equal(v2.ok, false);
+});
+
+await testAsync("une URL interdite n'est JAMAIS requêtée, même une fois", async () => {
+  for (const mauvaise of ["http://localhost:8080/", "http://127.0.0.1/", "http://169.254.169.254/",
+                          "http://192.168.1.1/", "http://api.internal/"]) {
+    const site = creerFauxSite({ "/": pageCorrecte() });
+    const r = await analyser({ ...CTX, url: mauvaise }, { fetchImpl: site.fetchImpl });
+    assert.equal(r.disponible, false, `${mauvaise} ne doit pas être analysée`);
+    assert.match(r.motif, /garde-fou réseau/i);
+    assert.equal(site.requetes.length, 0, `AUCUNE requête ne doit partir vers ${mauvaise}`);
+  }
+});
+
+await testAsync("le garde-fou est réappliqué à chaque redirection", async () => {
+  // Redirection du site client vers un hôte local : doit être refusée.
+  const site = creerFauxSite({
+    "/": { status: 302, redirigeVers: "http://169.254.169.254/latest/meta-data/" },
+    "/robots.txt": "User-agent: *\nDisallow:",
+  }, { originesSupplementaires: ["http://169.254.169.254"] });
+
+  const r = await analyser(CTX, { fetchImpl: site.fetchImpl, maxLiensVerifies: 0 });
+  const fuites = site.urlsVisitees.filter((u) => u.includes("169.254.169.254"));
+  assert.equal(fuites.length, 0, "la redirection vers les métadonnées doit être bloquée");
+  assert.equal(r.disponible, false);
 });
 
 console.log(`\n${ok} test(s) réussi(s).${process.exitCode ? " ⚠️ Des tests ont échoué." : " Tout est vert."}\n`);
