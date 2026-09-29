@@ -25,11 +25,18 @@ name: Robot SEO
 # =============================================================
 
 on:
-  # Surveillance automatique. Le cron GitHub est « best effort » :
-  # un retard de quelques minutes est normal, l'intervalle réel peut
-  # dépasser 15 min aux heures chargées.
+  # Surveillance automatique, toutes les 15 minutes.
+  #
+  # ⚠️ Minutes décalées VOLONTAIREMENT. GitHub documente que les
+  # déclenchements planifiés sont retardés — voire abandonnés — aux
+  # heures chargées, et les minutes rondes (:00 :15 :30 :45) sont de
+  # très loin les plus demandées. Un « */15 » n'a produit aucun run
+  # en 4 heures, alors que les mêmes créneaux décalés passent.
+  #
+  # Le cron GitHub reste « best effort » : un retard de quelques
+  # minutes est normal et ne signale pas une panne.
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "7,22,37,52 * * * *"
 
   # Bouton de secours / debug, et SEUL moyen de lancer un mode actif.
   workflow_dispatch:

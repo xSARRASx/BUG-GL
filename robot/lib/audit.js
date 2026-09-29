@@ -316,9 +316,13 @@ export function auditer(crawl, contexte = {}) {
   if (contexte.loiHoguet) {
     const trouves = termesHoguet(texteGlobal);
     if (trouves.length) {
+      // Le robot signale un ÉCART À LA RÈGLE INTERNE, il ne rend pas
+      // un avis juridique : ce n'est pas son rôle et il n'en a pas les
+      // éléments (le dossier, le contrat, la situation du client).
       constats.push(critique(CATEGORIES.LOI_HOGUET, "vocabulaire-interdit",
-        `Client SANS Carte G, mais le site emploie : ${trouves.join(", ")}. ` +
-        "Ces termes sont juridiquement interdits ici et doivent être reformulés. " +
+        `Client sans Carte G : le site emploie ${trouves.join(", ")}. ` +
+        "Ces formulations sont à éviter selon la règle Hoguet appliquée au dossier " +
+        "et doivent être reformulées. " +
         `Vocabulaire à utiliser : ${REMPLACEMENTS_HOGUET.join(", ")}.`));
     } else {
       constats.push(ok(CATEGORIES.LOI_HOGUET, "vocabulaire-ok",

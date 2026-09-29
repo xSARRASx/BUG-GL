@@ -27,7 +27,7 @@ import { creerFauxFetch, TOKEN_FACTICE } from "./fauxfetch.js";
 import { analyser, resumeAnonymeAnalyse } from "../lib/analyse.js";
 import { verifier } from "../lib/validate.js";
 import { extraire, typesJsonLd } from "../lib/html.js";
-import { normaliserUrl, cleUrl, analyserRobots, cheminAutorise, urlsDeSitemap } from "../lib/crawl.js";
+import { normaliserUrl, cleUrl, analyserRobots, cheminAutorise, urlsDeSitemap, JETON_AGENT } from "../lib/crawl.js";
 import { creerFauxSite, pageCorrecte, pagePauvre, SITEMAP_XML, ROBOTS_TXT, BASE as BASE_SITE } from "./fauxsite.js";
 import { selectionnerPourAudit, passagesPourToutCouvrir, creneauActuel, DUREE_CRENEAU_MS } from "../lib/rotation.js";
 import { creerLookupEpingle, lireAvecLimite, essayerAdresses, LIMITES,
@@ -1972,6 +1972,162 @@ await testAsync("le transport refuse une URL interdite si aucune adresse n'est f
     () => fetchEpingle("http://169.254.169.254/latest/meta-data/", { limiteOctets: 1000 }),
     TransportRefuse
   );
+});
+
+
+console.log("\n=== ROBOTS.TXT : GROUPES ET SPÉCIFICITÉ ===");
+
+const autorise = (txt, chemin) => cheminAutorise(analyserRobots(txt), chemin);
+
+await testAsync("« Allow: / » n'annule pas « Disallow: /private/ »", () => {
+  const txt = "User-agent: *\nAllow: /\nDisallow: /private/";
+  assert.equal(autorise(txt, "/private/secret"), false,
+    "la règle la plus spécifique doit l'emporter sur le Allow générique");
+  assert.equal(autorise(txt, "/public"), true);
+  assert.equal(autorise(txt, "/"), true);
+});
+
+await testAsync("« Allow » plus spécifique rouvre un sous-chemin interdit", () => {
+  const txt = "User-agent: *\nDisallow: /private/\nAllow: /private/public/";
+  assert.equal(autorise(txt, "/private/secret"), false);
+  assert.equal(autorise(txt, "/private/public/x"), true);
+});
+
+await testAsync("à spécificité égale, Allow gagne", () => {
+  const txt = "User-agent: *\nDisallow: /zone/\nAllow: /zone/";
+  assert.equal(autorise(txt, "/zone/page"), true);
+});
+
+await testAsync("le groupe de notre agent l'emporte sur le groupe générique", () => {
+  const txt = [
+    "User-agent: *",
+    "Disallow: /",
+    "",
+    "User-agent: GuestLuckyRobotSEO",
+    "Disallow: /admin/",
+  ].join("\n");
+  const r = analyserRobots(txt);
+  assert.equal(r.agentRetenu, JETON_AGENT);
+  assert.equal(cheminAutorise(r, "/page"), true, "le « Disallow: / » du groupe * ne nous concerne pas");
+  assert.equal(cheminAutorise(r, "/admin/x"), false);
+  assert.equal(r.bloqueTout, false);
+});
+
+await testAsync("sans groupe pour nous, on applique le groupe générique", () => {
+  const txt = [
+    "User-agent: Googlebot",
+    "Disallow: /reserve-google/",
+    "",
+    "User-agent: *",
+    "Disallow: /prive/",
+  ].join("\n");
+  const r = analyserRobots(txt);
+  assert.equal(r.agentRetenu, "*");
+  assert.equal(cheminAutorise(r, "/prive/x"), false);
+  assert.equal(cheminAutorise(r, "/reserve-google/x"), true, "les règles d'un autre robot ne s'appliquent pas");
+});
+
+await testAsync("plusieurs User-agent consécutifs partagent le même groupe", () => {
+  const txt = "User-agent: Bingbot\nUser-agent: GuestLuckyRobotSEO\nDisallow: /commun/";
+  const r = analyserRobots(txt);
+  assert.equal(r.agentRetenu, JETON_AGENT);
+  assert.equal(cheminAutorise(r, "/commun/x"), false);
+});
+
+await testAsync("une ligne User-agent après une directive ouvre un NOUVEAU groupe", () => {
+  const txt = "User-agent: *\nDisallow: /a/\nUser-agent: GuestLuckyRobotSEO\nDisallow: /b/";
+  const r = analyserRobots(txt);
+  assert.equal(r.groupes.length, 2, "deux groupes distincts attendus");
+  assert.equal(r.agentRetenu, JETON_AGENT);
+  assert.equal(cheminAutorise(r, "/a/x"), true, "le /a/ du groupe * ne nous concerne pas");
+  assert.equal(cheminAutorise(r, "/b/x"), false);
+});
+
+await testAsync("joker * pris en charge", () => {
+  const txt = "User-agent: *\nDisallow: /*.pdf";
+  assert.equal(autorise(txt, "/doc.pdf"), false);
+  assert.equal(autorise(txt, "/dossier/doc.pdf"), false);
+  assert.equal(autorise(txt, "/doc.html"), true);
+});
+
+await testAsync("ancre de fin $ prise en charge", () => {
+  const txt = "User-agent: *\nDisallow: /*.php$";
+  assert.equal(autorise(txt, "/x.php"), false);
+  assert.equal(autorise(txt, "/x.php?a=1"), true, "le $ ancre la fin de chaîne");
+  assert.equal(autorise(txt, "/x.phps"), true);
+});
+
+await testAsync("« Disallow: » vide n'interdit rien", () => {
+  const r = analyserRobots("User-agent: *\nDisallow:");
+  assert.equal(cheminAutorise(r, "/quoi-que-ce-soit"), true);
+  assert.equal(r.bloqueTout, false);
+});
+
+await testAsync("« Disallow: / » bloque bien tout le site", () => {
+  const r = analyserRobots("User-agent: *\nDisallow: /");
+  assert.equal(r.bloqueTout, true);
+  assert.equal(cheminAutorise(r, "/services"), false);
+});
+
+await testAsync("les directives Sitemap sont globales, hors groupes", () => {
+  const txt = [
+    "Sitemap: https://exemple.invalid/sm1.xml",
+    "User-agent: *",
+    "Disallow: /a/",
+    "Sitemap: https://exemple.invalid/sm2.xml",
+  ].join("\n");
+  const r = analyserRobots(txt);
+  assert.deepEqual(r.sitemaps, ["https://exemple.invalid/sm1.xml", "https://exemple.invalid/sm2.xml"]);
+});
+
+await testAsync("les commentaires et lignes vides sont ignorés", () => {
+  const txt = "# commentaire\nUser-agent: *   # nous tous\n\nDisallow: /x/  # interdit\n";
+  const r = analyserRobots(txt);
+  assert.equal(cheminAutorise(r, "/x/y"), false);
+  assert.equal(cheminAutorise(r, "/z"), true);
+});
+
+await testAsync("un robots.txt vide ou absent n'interdit rien", () => {
+  assert.equal(cheminAutorise(analyserRobots(""), "/x"), true);
+  assert.equal(cheminAutorise(null, "/x"), true);
+  assert.equal(cheminAutorise({ present: false }, "/x"), true);
+});
+
+await testAsync("le crawler applique bien la règle la plus spécifique", async () => {
+  const site = creerFauxSite({
+    "/": pageCorrecte({ liens: ["/private/secret", "/public"] }),
+    "/private/secret": pageCorrecte(),
+    "/public": pageCorrecte({ canonical: BASE_SITE + "/public", liens: ["/"] }),
+    "/robots.txt": "User-agent: *\nAllow: /\nDisallow: /private/",
+  });
+  await analyser(CTX, { fetchImpl: site.fetchImpl, resolveur: site.resolveur, maxLiensVerifies: 5 });
+  const interdits = site.urlsVisitees.filter((u) => u.includes("/private/"));
+  assert.equal(interdits.length, 0, "« Allow: / » ne doit pas rouvrir /private/ : " + interdits.join(", "));
+  assert.ok(site.urlsVisitees.some((u) => u.endsWith("/public")), "le reste du site reste explorable");
+});
+
+console.log("\n=== FORMULATION DU RAPPORT ===");
+
+await testAsync("le robot ne rend pas de conclusion juridique générale", async () => {
+  const { r } = await auditer1(siteComplet({
+    "/": pageCorrecte({ texteSup: "Nous assurons la gestion locative de votre bien." }),
+  }));
+  const c = r.constats.find((x) => x.code === "vocabulaire-interdit");
+  assert.ok(c, "le terme doit toujours être détecté");
+  assert.equal(c.niveau, "critique", "et rester un problème prioritaire");
+  assert.ok(!/juridiquement interdit/i.test(c.message),
+    "le robot ne doit pas affirmer une interdiction juridique générale");
+  assert.match(c.message, /règle Hoguet appliquée au dossier/i);
+  assert.match(c.message, /reformul/i);
+  assert.match(c.message, /conciergerie/, "les remplacements restent proposés");
+});
+
+await testAsync("le rappel du rapport est formulé avec la même prudence", async () => {
+  const { r } = await auditer1(siteComplet({
+    "/": pageCorrecte({ texteSup: "Nous assurons la gestion locative." }),
+  }));
+  assert.ok(!/juridiquement interdit/i.test(r.rapport));
+  assert.match(r.rapport, /règle Hoguet appliquée au dossier/i);
 });
 
 console.log(`\n${ok} test(s) réussi(s).${process.exitCode ? " ⚠️ Des tests ont échoué." : " Tout est vert."}\n`);

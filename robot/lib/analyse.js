@@ -77,9 +77,9 @@ export function composerRapport(audit, contexte, crawl) {
   const rappels = [];
   if (contexte.loiHoguet) {
     rappels.push(
-      "Client SANS Carte G : ne jamais employer « gestion », « gestionnaire », " +
-      "« gérer » ni « gestion locative ». Vocabulaire autorisé : " +
-      REMPLACEMENTS_HOGUET.join(", ") + "."
+      "Client sans Carte G : selon la règle Hoguet appliquée au dossier, éviter " +
+      "« gestion », « gestionnaire », « gérer » et « gestion locative ». " +
+      "Vocabulaire à privilégier : " + REMPLACEMENTS_HOGUET.join(", ") + "."
     );
   }
   if (!contexte.zoneConfirmee) {

@@ -80,15 +80,42 @@ const EXT_IGNOREES = /\.(pdf|jpe?g|png|gif|webp|svg|ico|css|js|zip|rar|mp4|mp3|a
 // -------------------------------------------------------------
 //  robots.txt
 // -------------------------------------------------------------
-/** Analyse un robots.txt : règles applicables à notre agent. */
-export function analyserRobots(texte) {
-  const lignes = String(texte || "").split(/\r?\n/);
-  const disallow = [];
-  const allow = [];
-  const sitemaps = [];
-  let groupeActif = false;
+/** Jeton produit de notre User-Agent, utilisé pour choisir le groupe robots.txt. */
+export const JETON_AGENT = "guestluckyrobotseo";
 
-  for (const ligne of lignes) {
+/**
+ * Transforme un motif robots.txt en expression régulière.
+ * Prend en charge le joker `*` et l'ancre de fin `$`.
+ */
+function motifVersRegex(motif) {
+  let m = String(motif || "");
+  const ancre = m.endsWith("$");
+  if (ancre) m = m.slice(0, -1);
+  const echappe = m.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+  return new RegExp("^" + echappe + (ancre ? "$" : ""));
+}
+
+/** Longueur du motif : sert à départager les règles (la plus spécifique gagne). */
+function specificite(motif) {
+  return String(motif || "").length;
+}
+
+/**
+ * Analyse un robots.txt en GROUPES, comme le veut le protocole.
+ *
+ * Points corrigés par rapport à une lecture naïve :
+ *   • les groupes User-agent sont séparés, pas fusionnés ;
+ *   • le groupe spécifique à notre agent l'emporte sur le groupe `*` ;
+ *   • plusieurs lignes User-agent consécutives partagent le même groupe ;
+ *   • les directives Sitemap sont globales, hors groupes.
+ */
+export function analyserRobots(texte) {
+  const groupes = [];
+  const sitemaps = [];
+  let groupeCourant = null;
+  let dansEnTete = false;   // on vient de lire une ou plusieurs lignes User-agent
+
+  for (const ligne of String(texte || "").split(/\r?\n/)) {
     const l = ligne.replace(/#.*$/, "").trim();
     if (!l) continue;
     const sep = l.indexOf(":");
@@ -97,33 +124,81 @@ export function analyserRobots(texte) {
     const val = l.slice(sep + 1).trim();
 
     if (cle === "sitemap") { sitemaps.push(val); continue; }
+
     if (cle === "user-agent") {
-      const ua = val.toLowerCase();
-      groupeActif = ua === "*" || ua.includes("guestlucky");
+      // Une ligne User-agent qui suit une directive ouvre un NOUVEAU groupe.
+      if (!dansEnTete) {
+        groupeCourant = { agents: [], regles: [] };
+        groupes.push(groupeCourant);
+        dansEnTete = true;
+      }
+      groupeCourant.agents.push(val.toLowerCase());
       continue;
     }
-    if (!groupeActif) continue;
-    if (cle === "disallow" && val) disallow.push(val);
-    if (cle === "allow" && val) allow.push(val);
+
+    if (cle === "allow" || cle === "disallow") {
+      dansEnTete = false;
+      if (!groupeCourant) continue;         // directive hors de tout groupe
+      if (cle === "disallow" && val === "") continue;  // « Disallow: » vide = rien d'interdit
+      if (val === "") continue;
+      groupeCourant.regles.push({ type: cle, motif: val });
+    }
   }
 
-  return {
+  // Choix du groupe : notre agent d'abord, `*` en repli.
+  const pourNous = groupes.filter((g) => g.agents.includes(JETON_AGENT));
+  const generiques = groupes.filter((g) => g.agents.includes("*"));
+  const retenus = pourNous.length ? pourNous : generiques;
+  const reglesApplicables = retenus.flatMap((g) => g.regles);
+
+  const robots = {
     present: true,
-    disallow,
-    allow,
+    groupes,
+    agentRetenu: pourNous.length ? JETON_AGENT : (generiques.length ? "*" : null),
+    reglesApplicables,
+    // Conservés pour compatibilité : vue à plat des règles retenues.
+    disallow: reglesApplicables.filter((r) => r.type === "disallow").map((r) => r.motif),
+    allow: reglesApplicables.filter((r) => r.type === "allow").map((r) => r.motif),
     sitemaps,
-    bloqueTout: disallow.includes("/"),
   };
+
+  robots.bloqueTout = !cheminAutorise(robots, "/");
+  return robots;
 }
 
-/** Vrai si le chemin est autorisé par le robots.txt analysé. */
+/**
+ * Le chemin est-il autorisé par le robots.txt analysé ?
+ *
+ * Règle d'arbitrage : parmi les motifs qui correspondent, le PLUS LONG
+ * l'emporte ; à longueur égale, Allow gagne. C'est ce qui fait que
+ * « Allow: / » n'annule pas « Disallow: /private/ ».
+ */
 export function cheminAutorise(robots, chemin) {
   if (!robots || !robots.present) return true;
-  const c = String(chemin || "/");
-  const correspond = (regle) => c.startsWith(regle.replace(/\*$/, ""));
-  // Allow l'emporte sur Disallow, comme chez Google.
-  if (robots.allow.some(correspond)) return true;
-  return !robots.disallow.some(correspond);
+  const regles = robots.reglesApplicables || [];
+  if (regles.length === 0) return true;
+
+  const c = String(chemin || "/") || "/";
+  let meilleure = null;
+
+  for (const regle of regles) {
+    let correspond;
+    try { correspond = motifVersRegex(regle.motif).test(c); }
+    catch { correspond = false; }
+    if (!correspond) continue;
+
+    const poids = specificite(regle.motif);
+    if (
+      !meilleure ||
+      poids > meilleure.poids ||
+      (poids === meilleure.poids && regle.type === "allow")
+    ) {
+      meilleure = { type: regle.type, poids };
+    }
+  }
+
+  if (!meilleure) return true;          // aucun motif ne correspond : autorisé
+  return meilleure.type === "allow";
 }
 
 // -------------------------------------------------------------
