@@ -1,43 +1,27 @@
 {
   "rules": {
+    "bugs": { ".read": true, ".write": true },
+    "presence": { ".read": true, ".write": true },
+    "meta": { ".read": true, ".write": true },
+
     "seo": {
       ".read": "auth != null && (auth.uid === 'ZftqC007OdgleB47JlQqfgWV2Xj2' || auth.uid === 'cNC9SUsnnMPaAQwkWSXbJTh6mw03' || auth.uid === 'GFMnGC8zdzYAzFrYKKLUvR096Dy2')",
       ".write": "auth != null && (auth.uid === 'ZftqC007OdgleB47JlQqfgWV2Xj2' || auth.uid === 'cNC9SUsnnMPaAQwkWSXbJTh6mw03' || auth.uid === 'GFMnGC8zdzYAzFrYKKLUvR096Dy2')",
-      ".indexOn": [
-        "statut"
-      ]
+      ".indexOn": ["statut"]
     },
+
     "seoRobot": {
       ".read": "auth != null && auth.uid === 'GFMnGC8zdzYAzFrYKKLUvR096Dy2'",
       ".write": "auth != null && auth.uid === 'GFMnGC8zdzYAzFrYKKLUvR096Dy2'"
     },
+
     "dettes": {
       ".read": "auth != null && auth.uid === 'ZftqC007OdgleB47JlQqfgWV2Xj2'",
       ".write": "auth != null && auth.uid === 'ZftqC007OdgleB47JlQqfgWV2Xj2'"
     },
-    "bugs": {
-      ".read": true,
-      ".write": true
-    },
-    "presence": {
-      ".read": true,
-      ".write": true
-    },
-    "meta": {
-      ".read": true,
-      ".write": true
-    },
-    "blog": {
-      ".read": true,
-      ".write": true
-    },
-    "archive": {
-      ".read": true,
-      ".write": true
-    },
-    "clients": {
-      ".read": true,
-      ".write": true
-    }
+
+    "blog": { ".read": true, ".write": true },
+    "archive": { ".read": true, ".write": true },
+    "clients": { ".read": true, ".write": true }
   }
 }
