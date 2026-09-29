@@ -22,6 +22,7 @@ import { entete, composerNote } from "../lib/note.js";
 import { traiterAvecFilet, reserverAvecFilet, libererAvecRepli, rollbackConfirme,
          normaliserClaim, ISSUES, MOTIFS } from "../lib/flow.js";
 import { creerClientRest, RAISONS } from "../lib/rest.js";
+import { ajouterRapport, MAX_TENTATIVES_RAPPORT } from "../lib/report.js";
 import { creerFauxFetch, TOKEN_FACTICE } from "./fauxfetch.js";
 import { creerFauxOps } from "./fauxops.js";
 
@@ -686,6 +687,150 @@ await testAsync("l'ID token ne sort jamais du client (masqué par le journal)", 
   assert.ok(urls.includes(TOKEN_FACTICE), "le token doit bien être transmis à Firebase");
   assert.ok(!nettoyerTexte(urls, [TOKEN_FACTICE]).includes(TOKEN_FACTICE),
     "toute journalisation doit le masquer");
+});
+
+
+console.log("\n=== COMPTE RENDU : ÉCRITURE CONDITIONNELLE ===");
+console.log("    (remplace runTransaction sur /seo/{cle}/note)");
+
+const NOTE_CAMILLE = "Note existante de Camille. Client sans Carte G.";
+const RAPPORT = "Yoast configuré. Schema LocalBusiness ajouté.";
+
+// Le garde-fou est en dry-run dans ce processus : on teste donc
+// rest.modifierConditionnel directement, avec le même transformateur
+// que report.js (composerNote), sans passer par assertWriteAllouée.
+const ajout = (rest, note = NOTE_CAMILLE, corps = RAPPORT, opts = {}) =>
+  rest.modifierConditionnel(
+    rest.cheminNote(CLE),
+    (actuelle) => composerNote(actuelle, corps, new Date("2026-09-29T10:00:00Z")),
+    opts
+  );
+
+await testAsync("note vide : le rapport est écrit sans saut de ligne parasite", async () => {
+  const { rest, faux } = clientAvec({ statut: null, etag: 'W/"n0"' });
+  const r = await ajout(rest, null);
+  assert.equal(r.ok, true);
+  assert.equal(r.tentatives, 1);
+  const envoye = JSON.parse(faux.puts[0].body);
+  assert.ok(envoye.startsWith("--- Compte rendu Robot SEO"));
+  assert.ok(!envoye.startsWith("\n"));
+});
+
+await testAsync("note existante : elle est intégralement préservée", async () => {
+  const { rest, faux } = clientAvec({ statut: NOTE_CAMILLE, etag: 'W/"n1"' });
+  const r = await ajout(rest);
+  assert.equal(r.ok, true);
+  const envoye = JSON.parse(faux.puts[0].body);
+  assert.ok(envoye.startsWith(NOTE_CAMILLE), "la note de Camille doit rester en tête");
+  assert.ok(envoye.includes(RAPPORT));
+  assert.ok(envoye.includes("--- Compte rendu Robot SEO — 2026-09-29 ---"));
+});
+
+await testAsync("PUT 200 : conditionné par l'ETag, une seule tentative", async () => {
+  const { rest, faux } = clientAvec({ statut: NOTE_CAMILLE, etag: 'W/"n1"' });
+  const r = await ajout(rest);
+  assert.equal(r.ok, true);
+  assert.equal(r.raison, RAISONS.CONFIRME);
+  assert.equal(faux.puts.length, 1);
+  assert.equal(faux.puts[0].headers["If-Match"], 'W/"n1"');
+  assert.equal(faux.gets[0].headers["X-Firebase-ETag"], "true");
+});
+
+await testAsync("412 puis retry réussi : recomposé sur la note À JOUR", async () => {
+  const NOTE_MODIFIEE = NOTE_CAMILLE + "\n\nAjout de Camille pendant le traitement.";
+  const { rest, faux } = clientAvec({
+    statut: [NOTE_CAMILLE, NOTE_MODIFIEE],   // 2e lecture = texte modifié
+    etag: ['W/"n1"', 'W/"n2"'],
+    putStatus: [412, 200],
+  });
+  const r = await ajout(rest);
+  assert.equal(r.ok, true);
+  assert.equal(r.tentatives, 2);
+  assert.equal(faux.gets.length, 2, "la note doit avoir été relue");
+
+  const envoye = JSON.parse(faux.puts[1].body);
+  assert.ok(envoye.includes("Ajout de Camille pendant le traitement."),
+    "la modification concurrente ne doit JAMAIS être écrasée");
+  assert.ok(envoye.includes(RAPPORT));
+  assert.equal(faux.puts[1].headers["If-Match"], 'W/"n2"', "le retry doit utiliser le nouvel ETag");
+});
+
+await testAsync("conflits répétés : abandon propre, aucune écriture forcée", async () => {
+  const { rest, faux } = clientAvec({
+    statut: NOTE_CAMILLE,
+    putStatus: 412,
+  });
+  const r = await ajout(rest, NOTE_CAMILLE, RAPPORT, { maxTentatives: 3 });
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, RAISONS.CONFLIT_PERSISTANT);
+  assert.equal(r.tentatives, 3);
+  assert.equal(faux.puts.length, 3, "exactement le nombre de tentatives autorisé");
+  assert.ok(faux.puts.every((q) => q.headers["If-Match"]),
+    "aucune écriture ne doit avoir été tentée sans condition");
+});
+
+await testAsync("401 : échec explicite, pas de retry", async () => {
+  const { rest, faux } = clientAvec({ getStatus: 401 });
+  const r = await ajout(rest);
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, RAISONS.AUTORISATION);
+  assert.equal(faux.puts.length, 0);
+});
+
+await testAsync("403 au PUT : échec explicite, pas de retry", async () => {
+  const { rest, faux } = clientAvec({ statut: NOTE_CAMILLE, putStatus: 403 });
+  const r = await ajout(rest);
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, RAISONS.AUTORISATION);
+  assert.equal(faux.puts.length, 1, "un 403 ne doit pas être réessayé");
+});
+
+await testAsync("erreur réseau : échec, jamais un succès", async () => {
+  const a = clientAvec({ getJette: true });
+  const r1 = await ajout(a.rest);
+  assert.equal(r1.ok, false);
+  assert.equal(r1.raison, RAISONS.RESEAU);
+  assert.equal(a.faux.puts.length, 0);
+
+  const b = clientAvec({ statut: NOTE_CAMILLE, putJette: true });
+  const r2 = await ajout(b.rest);
+  assert.equal(r2.ok, false);
+  assert.equal(r2.raison, RAISONS.RESEAU);
+});
+
+await testAsync("ETag absent : refus, plutôt qu'une écriture non conditionnelle", async () => {
+  const { rest, faux } = clientAvec({ statut: NOTE_CAMILLE, sansEtag: true });
+  const r = await ajout(rest);
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, RAISONS.ETAG_ABSENT);
+  assert.equal(faux.puts.length, 0, "aucun PUT sans ETag");
+});
+
+await testAsync("code HTTP inattendu : échec, jamais un succès", async () => {
+  for (const code of [500, 503, 404, 204]) {
+    const { rest } = clientAvec({ statut: NOTE_CAMILLE, putStatus: code });
+    const r = await ajout(rest);
+    assert.equal(r.ok, false, `HTTP ${code} ne doit jamais être un succès`);
+  }
+});
+
+await testAsync("le résultat ne contient jamais le contenu de la note", async () => {
+  const { rest } = clientAvec({ statut: NOTE_CAMILLE, etag: 'W/"n1"' });
+  const r = await ajout(rest);
+  const json = JSON.stringify(r);
+  assert.ok(!json.includes("Camille"), "aucun extrait de note ne doit remonter");
+  assert.ok(!json.includes(RAPPORT));
+  assert.ok(!json.includes(TOKEN_FACTICE));
+});
+
+await testAsync("ajouterRapport est bloqué par le garde-fou en dry-run", async () => {
+  const { rest } = clientAvec({ statut: NOTE_CAMILLE });
+  await assert.rejects(() => ajouterRapport(rest, CLE, RAPPORT), /DRY-RUN/);
+});
+
+await testAsync("la limite de tentatives par défaut est stricte et bornée", () => {
+  assert.ok(Number.isInteger(MAX_TENTATIVES_RAPPORT));
+  assert.ok(MAX_TENTATIVES_RAPPORT >= 2 && MAX_TENTATIVES_RAPPORT <= 10);
 });
 
 console.log(`\n${ok} test(s) réussi(s).${process.exitCode ? " ⚠️ Des tests ont échoué." : " Tout est vert."}\n`);

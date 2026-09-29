@@ -58,7 +58,15 @@ function creerOperations(db, rest) {
     avancerEtat: (cle, etat) => avancer(db, cle, etat),
 
     analyser: (contexte) => analyser(contexte),
-    ajouterRapport: (cle, rapport) => ajouterRapport(db, cle, rapport),
+    // Le résultat n'est jamais journalisé tel quel : il ne contient
+    // que des états, mais on lève sur échec pour que le filet agisse.
+    ajouterRapport: async (cle, rapport) => {
+      const res = await ajouterRapport(rest, cle, rapport);
+      if (!res.ok) {
+        throw new Error(`compte rendu non écrit (${res.raison}, ${res.tentatives} tentative(s))`);
+      }
+      return res;
+    },
 
     // Best effort : trace l'échec dans /seoRobot sans jamais faire échouer le flux.
     tenterEtatEchec: async (cle, motif) => {
