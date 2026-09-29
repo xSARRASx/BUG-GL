@@ -15,7 +15,8 @@ import { fileURLToPath } from "node:url";
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 
-import { initGuard, assertWriteAllowed, assertTermineAllowed, estAutorisee, getAllowedIds, DryRunViolation, AutoTermineDisabled, FicheNonAutorisee } from "../lib/guard.js";
+import { initGuard, assertWriteAllowed, assertTermineAllowed, estAutorisee, getAllowedIds,
+         verifierModeAutorise, DryRunViolation, AutoTermineDisabled, FicheNonAutorisee } from "../lib/guard.js";
 import { verifier } from "../lib/validate.js";
 import { resumeAnonyme, nettoyerTexte, valeursSensiblesDe, CHAMPS_SENSIBLES } from "../lib/redact.js";
 import { entete, composerNote } from "../lib/note.js";
@@ -128,6 +129,59 @@ test("la configuration par défaut est le mode sûr", () => {
   assert.equal(dryRun, true);
   assert.equal(autoTermine, false);
   assert.deepEqual(ids, []);
+});
+
+
+console.log("\n=== 4e VERROU : MODE ACTIF PLANIFIÉ ===");
+console.log("    (le cron ne doit JAMAIS pouvoir écrire tout seul)");
+
+const mode = (dryRun, allowScheduledActive, evenement) =>
+  verifierModeAutorise({ dryRun, allowScheduledActive, evenement });
+
+await testAsync("dry-run : tout déclencheur est autorisé", () => {
+  for (const ev of ["schedule", "workflow_dispatch", "push", "local", undefined]) {
+    assert.equal(mode(true, false, ev).ok, true, `dry-run devrait passer sur « ${ev} »`);
+  }
+});
+
+await testAsync("actif + cron + allowScheduledActive:false → REFUSÉ", () => {
+  const r = mode(false, false, "schedule");
+  assert.equal(r.ok, false);
+  assert.equal(r.raison, "actif_planifie_interdit");
+  assert.match(r.message, /allowScheduledActive/);
+  assert.match(r.message, /Aucune écriture/);
+});
+
+await testAsync("actif + cron + allowScheduledActive:true → autorisé", () => {
+  const r = mode(false, true, "schedule");
+  assert.equal(r.ok, true);
+  assert.equal(r.raison, "actif_planifie_autorise");
+});
+
+await testAsync("actif + lancement manuel → autorisé, sans dépendre du flag", () => {
+  assert.equal(mode(false, false, "workflow_dispatch").ok, true);
+  assert.equal(mode(false, true, "workflow_dispatch").ok, true);
+});
+
+await testAsync("actif + tout autre déclencheur → REFUSÉ", () => {
+  for (const ev of ["push", "pull_request", "release", "", undefined]) {
+    const r = mode(false, false, ev);
+    assert.equal(r.ok, false, `« ${ev} » ne doit pas autoriser le mode actif`);
+    assert.equal(r.raison, "declencheur_non_autorise");
+  }
+});
+
+await testAsync("une valeur non booléenne ne vaut pas consentement", () => {
+  for (const valeur of ["true", 1, {}, [], "oui", null, undefined]) {
+    assert.equal(mode(false, valeur, "schedule").ok, false,
+      `allowScheduledActive=${JSON.stringify(valeur)} ne doit pas ouvrir le verrou`);
+  }
+});
+
+await testAsync("verifierModeAutorise est pure : elle n'altère pas le garde-fou", () => {
+  mode(false, true, "schedule");
+  // Le garde-fou de ce processus est en dry-run : il doit le rester.
+  assert.throws(() => assertWriteAllowed("test", CLE), DryRunViolation);
 });
 
 console.log("\n=== VALIDATION DES CHAMPS ===");

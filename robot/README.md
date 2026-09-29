@@ -8,13 +8,14 @@ Robot de détection des fiches SEO à traiter, pour le projet
 > **Le robot ne modifie rien.** Il lit, vérifie, affiche un résumé anonymisé,
 > et s'arrête.
 >
-> Trois verrous indépendants, tous fermés par défaut :
+> Quatre verrous indépendants, tous fermés par défaut :
 >
 > | Verrou | Valeur | Effet |
 > |---|---|---|
 > | `dryRun` | `true` | aucune écriture, quelle que soit la fiche |
 > | `allowedTestIds` | 1 fiche | seule cette clé Firebase pourra être écrite |
 > | `autoTermine` | `false` | le passage en « terminé » reste humain |
+> | `allowScheduledActive` | `false` | le mode actif ne peut jamais venir du cron |
 >
 > WordPress n'est jamais touché. Ni OpenAI ni OpenSEO ne sont branchés.
 
@@ -71,8 +72,19 @@ rien exécuter.
 
 Onglet **Actions** → **Robot SEO (dry-run)** → **Run workflow**.
 
-Il tourne aussi automatiquement toutes les 6 heures. Le cron GitHub est
-*best effort* : un retard de 5 à 20 minutes est normal.
+Il tourne aussi **automatiquement toutes les 15 minutes** : Camille ajoute une
+fiche dans le Suivi SEO, le robot la détecte au passage suivant, sans aucune
+intervention de Martin.
+
+Le cron GitHub est *best effort* : un retard de quelques minutes est normal, et
+l'intervalle réel peut dépasser 15 minutes aux heures chargées. Le déclenchement
+manuel reste disponible comme bouton de secours / debug — et c'est le **seul**
+moyen de lancer un mode actif tant que `allowScheduledActive` vaut `false`.
+
+En dry-run, **toutes** les fiches au statut « à faire » sont examinées et
+affichées, pas seulement celle de la liste blanche : rien n'étant écrit, autant
+voir l'état réel de la file d'attente. La limite `maxFichesParPassage` ne
+protège que les écritures, donc elle ne s'applique qu'en mode actif.
 
 ### En local
 
@@ -136,9 +148,14 @@ Puis lancer **manuellement** : Actions → Robot SEO → Run workflow.
 
 Le contrôle pré-vol du workflow refuse le mode actif :
 
-* sur un déclenchement **cron** (le test ne peut donc pas se répéter tout seul) ;
+* sur un déclenchement **cron**, tant que `allowScheduledActive` vaut `false`
+  (le test ne peut donc pas se répéter tout seul, 96 fois par jour) ;
+* sur tout autre déclencheur que le lancement manuel ;
 * si `allowedTestIds` est **vide** ;
 * si `autoTermine` est à **true**.
+
+Le robot lui-même refait ce contrôle (`verifierModeAutorise`), pour que la
+protection ne dépende pas du seul fichier de workflow.
 
 ### Déroulé attendu du test actif
 
@@ -205,7 +222,7 @@ robot/
 │   ├── report.js         Ajout du compte rendu (inactif)
 │   └── analyse.js        Analyse SEO (stub)
 └── scripts/
-    ├── selftest.js       40 tests, sans dépendance ni réseau
+    ├── selftest.js       90 tests, sans dépendance ni réseau
     ├── fauxops.js        Faux magasin Firebase pour tester les échecs partiels
     └── scenarios/        Scénarios de mode actif (processus séparés)
 ```

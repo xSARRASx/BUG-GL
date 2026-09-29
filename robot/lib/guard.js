@@ -84,6 +84,57 @@ export function assertWriteAllowed(operation, cle) {
   if (!estAutorisee(cle)) throw new FicheNonAutorisee(cle, operation);
 }
 
+/**
+ * 4ᵉ verrou, indépendant des trois autres : le mode ACTIF ne doit
+ * jamais pouvoir se déclencher tout seul.
+ *
+ * Le robot tourne en cron toutes les 15 minutes. Si quelqu'un passait
+ * `dryRun` à false sans y penser, chaque passage écrirait en base sans
+ * qu'aucun humain ne l'ait demandé. On exige donc un consentement
+ * explicite et distinct : `allowScheduledActive`.
+ *
+ * Fonction PURE : elle ne lit ni n'altère l'état du garde-fou, ce qui
+ * la rend testable sans initGuard().
+ *
+ * @param {object} p
+ * @param {boolean} p.dryRun
+ * @param {boolean} p.allowScheduledActive
+ * @param {string}  p.evenement  nom de l'événement GitHub (schedule, workflow_dispatch…)
+ * @returns {{ok: boolean, raison: string, message?: string}}
+ */
+export function verifierModeAutorise({ dryRun, allowScheduledActive, evenement }) {
+  // En dry-run, aucune écriture n'est possible : tout déclencheur est sûr.
+  if (dryRun !== false) return { ok: true, raison: "dry_run" };
+
+  // Mode actif demandé.
+  if (evenement === "workflow_dispatch") {
+    // Lancement manuel : un humain a cliqué, c'est le cas prévu.
+    return { ok: true, raison: "actif_manuel" };
+  }
+
+  if (evenement === "schedule") {
+    if (allowScheduledActive === true) {
+      return { ok: true, raison: "actif_planifie_autorise" };
+    }
+    return {
+      ok: false,
+      raison: "actif_planifie_interdit",
+      message:
+        "Mode actif refusé sur un déclenchement planifié : allowScheduledActive vaut false. " +
+        "Aucune écriture n'a été tentée.",
+    };
+  }
+
+  // Tout autre déclencheur (push, pull_request…) : refus par défaut.
+  return {
+    ok: false,
+    raison: "declencheur_non_autorise",
+    message:
+      `Mode actif refusé sur un déclenchement « ${evenement || "inconnu"} ». ` +
+      "Seul un lancement manuel est autorisé. Aucune écriture n'a été tentée.",
+  };
+}
+
 /** À appeler avant un passage en statut « terminé ». */
 export function assertTermineAllowed(cle) {
   if (!autoTermine) throw new AutoTermineDisabled();

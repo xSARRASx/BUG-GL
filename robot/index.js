@@ -16,7 +16,8 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { initGuard, isDryRun, isAutoTermineAllowed, estAutorisee, getAllowedIds, DryRunViolation, FicheNonAutorisee } from "./lib/guard.js";
+import { initGuard, isDryRun, isAutoTermineAllowed, estAutorisee, getAllowedIds,
+         verifierModeAutorise, DryRunViolation, FicheNonAutorisee } from "./lib/guard.js";
 import { log, erreurLisible, enregistrerSecret } from "./lib/log.js";
 import { connecter, deconnecter, ConfigurationManquante } from "./lib/firebase.js";
 import { listerAFaire } from "./lib/detect.js";
@@ -38,6 +39,8 @@ function lireConfig() {
   // Sécurité : toute valeur autre que false explicite = dry-run.
   if (cfg.dryRun !== false) cfg.dryRun = true;
   if (cfg.autoTermine !== true) cfg.autoTermine = false;
+  // Le mode actif planifié doit être un consentement EXPLICITE.
+  if (cfg.allowScheduledActive !== true) cfg.allowScheduledActive = false;
   // Liste blanche absente ou invalide = aucune fiche autorisée.
   if (!Array.isArray(cfg.allowedTestIds)) cfg.allowedTestIds = [];
   return cfg;
@@ -174,11 +177,28 @@ async function main() {
   const config = lireConfig();
   const { dryRun, autoTermine, allowedIds } = initGuard(config);
 
-  log.titre("ROBOT SEO — V1.1");
-  log.info(`Mode ............. ${dryRun ? "DRY-RUN (aucune écriture)" : "ACTIF (écritures autorisées)"}`);
-  log.info(`autoTermine ...... ${autoTermine ? "ACTIVÉ" : "désactivé"}`);
-  log.info(`Liste blanche .... ${allowedIds.length ? allowedIds.join(", ") : "VIDE — aucune écriture possible"}`);
-  log.info(`Max par passage .. ${config.maxFichesParPassage}`);
+  // GitHub Actions renseigne GITHUB_EVENT_NAME automatiquement.
+  const evenement = process.env.GITHUB_EVENT_NAME || process.env.EVENEMENT || "local";
+
+  log.titre("ROBOT SEO — V1.2");
+  log.info(`Mode ................. ${dryRun ? "DRY-RUN (aucune écriture)" : "ACTIF (écritures autorisées)"}`);
+  log.info(`Déclencheur .......... ${evenement}`);
+  log.info(`autoTermine .......... ${autoTermine ? "ACTIVÉ" : "désactivé"}`);
+  log.info(`allowScheduledActive . ${config.allowScheduledActive ? "ACTIVÉ" : "désactivé"}`);
+  log.info(`Liste blanche ........ ${allowedIds.length ? allowedIds.join(", ") : "VIDE — aucune écriture possible"}`);
+  log.info(`Max par passage ...... ${dryRun ? "sans objet (dry-run)" : config.maxFichesParPassage}`);
+
+  // 4ᵉ verrou : le mode actif ne doit jamais se déclencher tout seul.
+  const mode = verifierModeAutorise({
+    dryRun,
+    allowScheduledActive: config.allowScheduledActive,
+    evenement,
+  });
+  if (!mode.ok) {
+    log.erreur(mode.message);
+    log.info("Le robot s'arrête sans rien modifier.");
+    return 1;
+  }
 
   if (!dryRun && allowedIds.length === 0) {
     log.erreur("Mode actif demandé mais allowedTestIds est vide : aucune fiche ne peut être écrite.");
@@ -207,9 +227,13 @@ async function main() {
       return 0;
     }
 
-    const aTraiter = fiches.slice(0, config.maxFichesParPassage);
+    // En dry-run rien n'est écrit : on examine TOUTES les fiches « à faire »,
+    // pour que Camille voie l'état réel de sa file d'attente.
+    // La limite ne protège que les écritures, donc elle ne s'applique
+    // qu'en mode actif.
+    const aTraiter = dryRun ? fiches : fiches.slice(0, config.maxFichesParPassage);
     if (fiches.length > aTraiter.length) {
-      log.info(`Limité à ${aTraiter.length} fiche(s) pour ce passage.`);
+      log.info(`Limité à ${aTraiter.length} fiche(s) traitée(s) pour ce passage.`);
     }
 
     log.titre("VÉRIFICATION");
@@ -278,6 +302,7 @@ async function main() {
     }
 
     log.titre("BILAN");
+    log.info(`Fiches détectées ....... ${fiches.length}`);
     log.info(`Fiches examinées ....... ${aTraiter.length}`);
     log.info(`Traitables ............. ${bilan.traitables}`);
     log.info(`Bloquées ............... ${bilan.bloquees}`);
