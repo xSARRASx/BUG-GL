@@ -13,6 +13,18 @@ Lire en priorité `robot/mcp/ETAT_INSTALLATION.md` pour les preuves, les limites
 
 Le MCP V1 permet la consultation GitHub du Robot SEO et la tenue d'un journal privé sur sa machine hôte. Il n'expose aucune écriture GitHub/Firebase/WordPress et aucun déclenchement de workflow. Aucun service payant ou infrastructure d'un autre projet n'a été activé. Le code, la configuration et le workflow du robot historique restent inchangés par ce chantier.
 
+## Vérification du 30 septembre 2026 — installation toujours impossible depuis un conteneur
+
+Une session ultérieure a tenté de mener l'installation jusqu'au bout. Même
+environnement Linux isolé, pas le Mac. Au HEAD `462e7c1` : 75 tests MCP réussis,
+212 tests du robot historique réussis, et `install.py --register-codex` refusé comme
+prévu hors Mac. Le paquet reste sain ; l'obstacle est l'absence d'accès à la machine
+de Martin, pas le code.
+
+Statut inchangé : connecteur **construit et testé**, **non installé**, **non connecté**.
+Ne pas annoncer une reprise opérationnelle entre conversations tant que le test
+décrit à l'étape 5 de `robot/mcp/ETAT_INSTALLATION.md` n'a pas réellement eu lieu.
+
 ## À lire à chaque reprise
 
 Ce fichier est le point d'entrée de la continuité du chantier, pas une autorisation de déploiement. Le mettre à jour pendant le travail, et pas seulement à la fin d'une conversation. La demande actuelle de l'utilisateur et les faits vérifiés dans les services priment sur ce document. Une discussion interrompue n'impose ni réinstallation ni remise à zéro.

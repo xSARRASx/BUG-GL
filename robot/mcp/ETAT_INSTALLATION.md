@@ -33,6 +33,28 @@ Le terminal fourni à l'assistant est un environnement Linux isolé, pas le term
 
 L'unique projet Supabase découvert appartient à Leapway et n'a pas été utilisé. Aucun tunnel, secret ou serveur de production GuestLucky n'a été réutilisé. Aucun service payant, projet cloud, nouvel accès externe ou permission globale n'a été créé.
 
+## Nouvelle tentative du 30 septembre 2026 — même blocage
+
+Une session ultérieure a reçu la consigne de reprendre l'installation et de la mener
+jusqu'à la connexion ChatGPT. Elle disposait du même type d'environnement : **Ubuntu
+24.04 x86_64, Python 3.11.15, aucun `~/Library`.** Ce n'est pas le Mac de Martin.
+
+Vérifications refaites au HEAD `462e7c17ebb2f2be25bb89d5fcb0431c176d1265` :
+
+- `python3 -m unittest test_server` → **75 tests, OK**, 7,347 s ;
+- `node scripts/selftest.js` (robot historique) → **212 tests, OK** ;
+- `python3 robot/mcp/install.py --register-codex` → refus attendu :
+  « Installation Mac refusée : ce terminal n'est pas celui d'un Mac. », code 1.
+
+Le garde-fou de l'installateur fonctionne donc toujours. Aucune installation, aucun
+tunnel, aucune connexion ChatGPT, aucun test en conversation réelle n'a pu être
+exécuté. Rien n'a été modifié dans le dépôt en dehors de cette note.
+
+Le blocage n'est pas un défaut du paquet : il est structurel. Un conteneur cloud ne
+peut pas installer un programme sur la machine de quelqu'un d'autre, ni créer un
+tunnel depuis cette machine, ni approuver une connexion dans son interface ChatGPT.
+Les étapes 2 à 6 ci-dessous exigent un terminal réellement situé sur le Mac.
+
 ## Prochaine étape pour une session ayant réellement accès au Mac
 
 1. Lire ce fichier, `robot/AGENTS.md`, `robot/REPRISE.md` et `robot/mcp/README.md`. Vérifier le dépôt, la branche et le HEAD réel ; préserver tout travail concurrent.
