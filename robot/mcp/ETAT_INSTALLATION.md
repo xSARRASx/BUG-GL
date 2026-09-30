@@ -137,3 +137,13 @@ Sample : `sample_mcp_stdio_local`.
 La configuration cible le serveur MCP Robot SEO installé et son journal privé.
 
 Étape suivante : exécuter `tunnel-client doctor --profile robot-seo-bug-gl --explain` dans le même Terminal où `CONTROL_PLANE_API_KEY` est exportée. Ne pas démarrer le daemon avant doctor concluant.
+
+
+## Doctor initial — blocage local isolé
+
+`tunnel-client doctor --profile robot-seo-bug-gl --explain` a validé le profil, le tunnel ID, la clé runtime, la commande MCP et l'exécutable Python. Échec unique : `127.0.0.1:8080` est déjà occupé.
+
+Ne pas tuer le processus occupant 8080. Retester avec :
+`--health.listen-addr 127.0.0.1:8768`
+
+Le skip du plugin Codex est facultatif et non bloquant pour ChatGPT.
