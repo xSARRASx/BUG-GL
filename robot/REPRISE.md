@@ -179,3 +179,23 @@ Résultat confirmé :
 La clé Runtime reste hors du chat et hors du dépôt.
 
 Prochaine étape exacte : `tunnel-client doctor --profile robot-seo-bug-gl --explain`. Ne pas lancer `run` avant validation du doctor.
+
+
+## 30 septembre 2026 — premier doctor : seul le port santé bloque
+
+Commande réelle sur le Mac :
+`tunnel-client doctor --profile robot-seo-bug-gl --explain`
+
+Résultat :
+- config_source PASS ;
+- profile_load PASS ;
+- tunnel_id PASS ;
+- control_plane_api_key PASS ;
+- mcp_target PASS ;
+- mcp_command_executable PASS (`/opt/homebrew/bin/python3`) ;
+- serveur MCP stdio correctement ciblé ;
+- seul échec : `health_listener` sur `127.0.0.1:8080`, déjà utilisé ;
+- résultat global : fail uniquement à cause de ce port local ;
+- plugin Codex facultatif non installé, sans impact pour ChatGPT.
+
+Ne pas arrêter le processus qui occupe 8080 sans l'identifier. Prochaine action : rerun doctor en surchargeant uniquement le listener santé sur `127.0.0.1:8768`, puis utiliser le même port pour `run` si doctor passe.
