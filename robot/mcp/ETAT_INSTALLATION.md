@@ -92,3 +92,17 @@ Le 30 septembre 2026, Martin a créé avec succès le tunnel OpenAI Platform dé
 Martin est sur GitHub `openai/tunnel-client`, release `v0.0.15` (Latest). Ne pas prendre les assets `runtime-cloudflared` visibles en haut : ils sont destinés à l'exécution runtime, tandis que la configuration actuelle nécessite le client complet pour `init`, `doctor` et `run`.
 
 Asset cible pour ce Mac Apple Silicon : `tunnel-client-v0.0.15-darwin-arm64.zip`.
+
+
+## Installation officielle du tunnel-client sur Mac
+
+Vérification du README officiel `openai/tunnel-client` tag `v0.0.15` : Homebrew est le chemin supporté sur macOS. Les archives ZIP directes ne sont pas notarifiées et peuvent être bloquées par Gatekeeper. Ne pas contourner ces protections.
+
+Commande cible :
+`brew install openai/tools/tunnel-client`
+
+Après installation :
+`tunnel-client --version`
+`tunnel-client help quickstart`
+
+Le ZIP `tunnel-client-v0.0.15-darwin-arm64.zip` téléchargé est correct mais ne sera pas utilisé pour l'installation manuelle.
