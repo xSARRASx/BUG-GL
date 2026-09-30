@@ -85,3 +85,10 @@ Le serveur, ses neuf outils MCP, deux ressources, un prompt de reprise, SQLite v
 Le 30 septembre 2026, Martin a créé avec succès le tunnel OpenAI Platform dédié `robot-seo-bug-gl`. Il apparaît dans la liste Tunnels à côté de l'ancien tunnel GuestLucky, sans remplacement ni modification de celui-ci. L'association organisation/workspace est visible dans Platform.
 
 État après création : tunnel hébergé créé côté OpenAI, mais aucun `tunnel-client` local n'est encore attesté comme connecté/ready. Étape suivante : télécharger `tunnel-client` depuis Platform, configurer le profil stdio vers le serveur MCP installé sur le Mac, exécuter `doctor` puis `run`, et vérifier la readiness avant de créer le plugin ChatGPT.
+
+
+## Client tunnel — release officielle atteinte
+
+Martin est sur GitHub `openai/tunnel-client`, release `v0.0.15` (Latest). Ne pas prendre les assets `runtime-cloudflared` visibles en haut : ils sont destinés à l'exécution runtime, tandis que la configuration actuelle nécessite le client complet pour `init`, `doctor` et `run`.
+
+Asset cible pour ce Mac Apple Silicon : `tunnel-client-v0.0.15-darwin-arm64.zip`.
