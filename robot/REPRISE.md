@@ -3,18 +3,28 @@
 Dernière mise à jour : 30 septembre 2026.
 Périmètre exclusif : Robot SEO dans `xSARRASx/BUG-GL`.
 
+## Dernier point confirmé — connecteur MCP construit, installation restante
+
+Cette entrée complète et actualise les états historiques ci-dessous. À la demande actuelle de Martin de réaliser le connecteur, le serveur et son paquet d'installation ont été créés dans `robot/mcp/`. **75 tests ont réussi dans l'environnement Linux isolé** : journal durable, reprise après redémarrage, concurrence, idempotence et transports MCP locaux. Le code et les tests ont été enregistrés dans GitHub et leurs blobs ont été comparés aux fichiers testés.
+
+**Le serveur n'est pas installé sur le Mac, aucun tunnel MCP dédié n'a été créé et aucune nouvelle connexion ChatGPT n'a été installée.** L'environnement accessible était Linux, pas le terminal de l'ordinateur de Martin. Le connecteur n'est donc pas encore utilisable depuis une nouvelle conversation.
+
+Lire en priorité `robot/mcp/ETAT_INSTALLATION.md` pour les preuves, les limites et la procédure restante, puis `robot/mcp/README.md`. Prochaine action : depuis une session ayant réellement accès au Mac, exécuter l'installation préparée, configurer un tunnel dédié autorisé et vérifier la reprise dans deux nouvelles conversations. Ne pas redévelopper le serveur ni recréer les données déjà enregistrées.
+
+Le MCP V1 permet la consultation GitHub du Robot SEO et la tenue d'un journal privé sur sa machine hôte. Il n'expose aucune écriture GitHub/Firebase/WordPress et aucun déclenchement de workflow. Aucun service payant ou infrastructure d'un autre projet n'a été activé. Le code, la configuration et le workflow du robot historique restent inchangés par ce chantier.
+
 ## À lire à chaque reprise
 
 Ce fichier est le point d'entrée de la continuité du chantier, pas une autorisation de déploiement. Le mettre à jour pendant le travail, et pas seulement à la fin d'une conversation. La demande actuelle de l'utilisateur et les faits vérifiés dans les services priment sur ce document. Une discussion interrompue n'impose ni réinstallation ni remise à zéro.
 
 Dépôt : `xSARRASx/BUG-GL`.
 Branche de travail constatée : `claude/amazing-euler-U7YqQ`.
-Version du CODE de référence : `7f6cd8a69e88357bcfe95c8a1fd5f0c6085df629` (les commits documentaires suivants ne changent pas cette référence).
+Version du CODE du robot historique de référence : `7f6cd8a69e88357bcfe95c8a1fd5f0c6085df629` (les commits documentaires et le nouveau dossier `robot/mcp` ne changent pas ce code historique).
 Workflow : `.github/workflows/seo-robot.yml`, nommé `Robot SEO`.
 
 Ne pas confondre ce chantier avec `site-seb-`, la production de l'application GuestLucky, les autres robots, ou les autres pages métier de ce dépôt. Ne pas exécuter les anciennes consignes contenues dans `HANDOFF-AUTOMATISATION-SEO.md` sur la seule base de leur présence.
 
-## État à la dernière vérification
+## État à la dernière vérification du robot historique
 
 `robot/config.json`, relu au SHA de référence le 30 septembre 2026 :
 
@@ -46,9 +56,9 @@ Le cron est configuré aux minutes `7,22,37,52`. Le démarrage autonome est dém
 
 ## Où reprendre maintenant
 
-Dernière étape confirmée : audit public exécuté automatiquement en lecture seule ; mise en place de ce point de reprise documentaire.
+Dernière étape confirmée : connecteur de continuité MCP construit et testé localement ; détails dans `robot/mcp/ETAT_INSTALLATION.md`. L'audit public historique a déjà été exécuté automatiquement en lecture seule.
 Action d'écriture distante en attente de confirmation : aucune action métier enregistrée dans ce point de reprise.
-Prochaine étape : préparer la continuité par connecteur MCP partagé demandée le 30 septembre (voir la clarification ci-dessous), après vérification des accès et de l'état réel. Le serveur MCP dédié n'est pas créé ni déployé par cette mise à jour documentaire.
+Prochaine étape : installation du connecteur sur une machine persistante autorisée, connexion et test dans de nouvelles conversations. Ne pas confondre ce travail avec la correction WordPress, qui n'est pas activée.
 Travail restant sur le robot : régularité et couverture des audits ; exploitation des résultats ; puis conception et essai d'un parcours de correction WordPress sur un site pilote avec sauvegarde et contrôle après modification. Cela nécessite encore une implémentation et une validation : ne pas l'annoncer comme acquis. Ne pas relancer un ancien run actif.
 
 ## Protocole pour ne pas perdre la progression
@@ -82,9 +92,9 @@ Ajout documentaire uniquement. Objectif : permettre une reprise même si le fil 
 
 ### 30 septembre 2026 — clarification : un connecteur partagé, pas seulement une note
 
-Demande actuelle : permettre à de nombreuses nouvelles conversations de se connecter au même Robot SEO, de retrouver ses règles et son état courant, puis de reprendre le travail même après une coupure imprévue. La demande porte à la fois sur la continuité du contexte et sur l'accès réel au robot. Un fichier à recopier manuellement n'est pas une réponse suffisante.
+Demande actuelle au moment de cette clarification : permettre à de nombreuses nouvelles conversations de se connecter au même Robot SEO, de retrouver ses règles et son état courant, puis de reprendre le travail même après une coupure imprévue. La demande porte à la fois sur la continuité du contexte et sur l'accès réel au robot. Un fichier à recopier manuellement n'est pas une réponse suffisante.
 
-Architecture proposée, À CONSTRUIRE et À TESTER :
+Architecture proposée lors de cette clarification, avant la construction décrite en tête du fichier :
 
 - Un serveur MCP dédié au Robot SEO, authentifié, relié aux sources autorisées (code, configuration et exécutions GitHub ; état métier privé seulement avec les droits adaptés).
 - Une procédure de reprise distribuée avec le connecteur : appeler un outil de démarrage tel que `reprendre_robot`, recevoir les règles actuelles, les permissions effectives, les opérations confirmées ou incertaines, les preuves datées et la prochaine étape ; puis récupérer les détails utiles à la demande.
@@ -94,4 +104,8 @@ Architecture proposée, À CONSTRUIRE et À TESTER :
 - Séparation entre consultation, tenue du journal et commandes métier. La création du connecteur ne doit ouvrir ni les écritures Firebase/WordPress, ni le passage en terminé, ni les dépenses. Les règles d'accès doivent être appliquées côté serveur, pas seulement expliquées dans un texte.
 - Installation et authentification à vérifier sur chaque environnement client visé. Ne pas promettre une sélection/connexion spontanée dans chaque nouvelle conversation, ni une lecture exhaustive instantanée, ni l'archivage automatique des messages par le seul MCP.
 
-Statut après cette clarification : besoin documenté ; serveur MCP dédié non déployé ; aucun nouvel accès, secret, hébergement ou budget créé. Les fichiers `REPRISE.md` et `AGENTS.md` sont la base documentaire, pas le connecteur lui-même.
+Statut historique après cette clarification : besoin documenté ; serveur MCP dédié non déployé ; aucun nouvel accès, secret, hébergement ou budget créé. Les fichiers `REPRISE.md` et `AGENTS.md` étaient la base documentaire, pas le connecteur lui-même.
+
+### 30 septembre 2026 — réalisation de la V1 du connecteur
+
+Ajout de `robot/mcp/server.py`, de 75 tests, d'un installateur Mac, d'une procédure de reprise et de documentation. La base privée du futur serveur est séparée du dépôt public. Sources testées comparées aux blobs GitHub. Aucun code historique du robot ni workflow modifié. Installation sur le Mac, tunnel dédié, accès réseau réel du serveur et connexion ChatGPT restent non exécutés ; le détail fait foi dans `robot/mcp/ETAT_INSTALLATION.md`.
