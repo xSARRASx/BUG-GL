@@ -48,8 +48,8 @@ Le cron est configuré aux minutes `7,22,37,52`. Le démarrage autonome est dém
 
 Dernière étape confirmée : audit public exécuté automatiquement en lecture seule ; mise en place de ce point de reprise documentaire.
 Action d'écriture distante en attente de confirmation : aucune action métier enregistrée dans ce point de reprise.
-Prochaine étape de lecture : vérifier le HEAD réel, la configuration courante et les nouveaux runs avant de décider de la suite. Ne pas relancer un ancien run actif.
-Travail restant : régularité et couverture des audits ; exploitation des résultats ; puis conception et essai d'un parcours de correction WordPress sur un site pilote avec sauvegarde et contrôle après modification. Cela nécessite encore une implémentation et une validation : ne pas l'annoncer comme acquis.
+Prochaine étape : préparer la continuité par connecteur MCP partagé demandée le 30 septembre (voir la clarification ci-dessous), après vérification des accès et de l'état réel. Le serveur MCP dédié n'est pas créé ni déployé par cette mise à jour documentaire.
+Travail restant sur le robot : régularité et couverture des audits ; exploitation des résultats ; puis conception et essai d'un parcours de correction WordPress sur un site pilote avec sauvegarde et contrôle après modification. Cela nécessite encore une implémentation et une validation : ne pas l'annoncer comme acquis. Ne pas relancer un ancien run actif.
 
 ## Protocole pour ne pas perdre la progression
 
@@ -79,3 +79,19 @@ Une nouvelle conversation doit lire ce point d'entrée avec un accès autorisé 
 ### 30 septembre 2026 — continuité entre conversations
 
 Ajout documentaire uniquement. Objectif : permettre une reprise même si le fil s'interrompt sans préparation de fin de session. Aucun code du robot, réglage Firebase, workflow, statut ou site client modifié par cet ajout. La note de passation datée reste un instantané historique ; le présent chemin stable sert de point d'entrée pour les prochaines mises à jour.
+
+### 30 septembre 2026 — clarification : un connecteur partagé, pas seulement une note
+
+Demande actuelle : permettre à de nombreuses nouvelles conversations de se connecter au même Robot SEO, de retrouver ses règles et son état courant, puis de reprendre le travail même après une coupure imprévue. La demande porte à la fois sur la continuité du contexte et sur l'accès réel au robot. Un fichier à recopier manuellement n'est pas une réponse suffisante.
+
+Architecture proposée, À CONSTRUIRE et À TESTER :
+
+- Un serveur MCP dédié au Robot SEO, authentifié, relié aux sources autorisées (code, configuration et exécutions GitHub ; état métier privé seulement avec les droits adaptés).
+- Une procédure de reprise distribuée avec le connecteur : appeler un outil de démarrage tel que `reprendre_robot`, recevoir les règles actuelles, les permissions effectives, les opérations confirmées ou incertaines, les preuves datées et la prochaine étape ; puis récupérer les détails utiles à la demande.
+- Un historique durable et interrogeable. Ne pas pousser 100 000 lignes dans chaque conversation : fournir un dossier de démarrage borné, un index et une lecture paginée/recherche des archives, sans présenter ce résumé comme la lecture exhaustive de l'historique.
+- Un journal d'opérations enregistré par le serveur avant et après chaque action effectuée par ce connecteur. Une interruption du chat ne doit pas supprimer le suivi de l'opération. Les décisions de conversation doivent également être enregistrées explicitement par un outil de checkpoint ; un MCP ne reçoit pas spontanément tous les messages du chat.
+- Gestion des conversations concurrentes : versions, identifiants d'opération, refus d'écrasement et verrou par tâche lorsque nécessaire. Si un résultat est incertain, le réconcilier avec le service concerné avant toute répétition. Ne pas promettre une exécution exactement une fois sans prise en charge effective du service distant.
+- Séparation entre consultation, tenue du journal et commandes métier. La création du connecteur ne doit ouvrir ni les écritures Firebase/WordPress, ni le passage en terminé, ni les dépenses. Les règles d'accès doivent être appliquées côté serveur, pas seulement expliquées dans un texte.
+- Installation et authentification à vérifier sur chaque environnement client visé. Ne pas promettre une sélection/connexion spontanée dans chaque nouvelle conversation, ni une lecture exhaustive instantanée, ni l'archivage automatique des messages par le seul MCP.
+
+Statut après cette clarification : besoin documenté ; serveur MCP dédié non déployé ; aucun nouvel accès, secret, hébergement ou budget créé. Les fichiers `REPRISE.md` et `AGENTS.md` sont la base documentaire, pas le connecteur lui-même.
