@@ -4,6 +4,8 @@ Portée : le dossier `robot/` uniquement. Les instructions de niveau supérieur 
 
 À l'ouverture d'une session, lire `robot/REPRISE.md`, puis vérifier le dépôt, la branche, le HEAD et la configuration réellement présents. Les observations datées ne remplacent jamais une vérification actuelle.
 
+Pour la continuité MCP partagée, lire aussi `robot/mcp/ETAT_INSTALLATION.md`. Au 30 septembre 2026, le serveur est construit et 75 tests locaux ont réussi, mais l'installation Mac, le tunnel dédié et la connexion ChatGPT ne sont pas attestés. Ne pas reprendre les anciennes mentions « à construire » comme l'état actuel, ni annoncer une connexion déjà faite. Le paquet d'installation est dans `robot/mcp/`.
+
 Pendant le travail, tenir `robot/REPRISE.md` à jour après chaque lot significatif. Ne pas attendre la fin de la conversation pour sauvegarder le point de reprise. Enregistrer l'objectif et le périmètre avant une opération importante autorisée, puis son résultat et sa preuve après confirmation. Conserver la distinction entre préparé, exécuté, vérifié, bloqué et résultat incertain.
 
 Si la session reprend après une interruption, vérifier l'état réel de l'opération en cours avant de la répéter. Ne pas rejouer un ancien workflow actif ni recréer les accès par défaut. Ne pas forcer l'écrasement d'un travail concurrent ; demander avant une fusion ambiguë ou une suppression.
