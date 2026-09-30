@@ -145,3 +145,16 @@ Le ZIP complet arm64 a bien été téléchargé et inspecté : il contient `tunn
 Les ZIP de release ne sont pas notarifiés et peuvent être bloqués par Gatekeeper ; ne pas contourner avec `xattr`, `spctl` ou « Open Anyway ». Le ZIP téléchargé peut rester dans Downloads mais ne doit pas être utilisé pour installer manuellement le binaire.
 
 Prochaine action : installer via Homebrew, puis vérifier `tunnel-client --version` et `tunnel-client help quickstart`. Ensuite créer une clé Runtime API restreinte Tunnels Read + Use et initialiser le profil stdio.
+
+
+## 30 septembre 2026 — tunnel-client installé via Homebrew
+
+Martin a exécuté sur son Mac :
+- `brew install openai/tools/tunnel-client` ;
+- Homebrew a confirmé `openai/tools/tunnel-client 0.0.14` déjà installé et à jour pour le tap ;
+- `tunnel-client --version` → `0.0.14+0f870e50a973fa820d4c409000059e181e8d242b` ;
+- `tunnel-client help quickstart` fonctionne et expose bien les parcours `init`, `doctor`, `run`, les Runtime API keys et le sample `sample_mcp_stdio_local`.
+
+La release GitHub v0.0.15 existe mais le tap Homebrew supporté sert encore 0.0.14. Ne pas contourner Gatekeeper avec le ZIP ; utiliser la version Homebrew tant qu'elle fournit le parcours requis.
+
+Prochaine étape exacte : créer une **Runtime API key** restreinte avec permissions Tunnels Read + Use depuis Organization settings → API keys. Ne pas utiliser une Admin key ni une clé All. Ne jamais coller la clé dans le chat. Ensuite initialiser le profil `robot-seo-bug-gl` avec le tunnel ID dédié et la commande stdio installée.
