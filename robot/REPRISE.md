@@ -125,3 +125,12 @@ Preuve visuelle fournie par Martin : dans OpenAI Platform → Organization setti
 Le tunnel n'est pas encore relié au serveur local : `tunnel-client` reste à télécharger/configurer sur le Mac, puis à passer en état ready avant de créer le plugin ChatGPT. Ne pas déclarer le connecteur opérationnel avant ce test.
 
 Prochaine action exacte : utiliser le bouton `Download tunnel-client` de la page Tunnels, installer/exécuter le client sur le Mac, configurer un profil local stdio avec le nouveau tunnel Robot SEO et la commande MCP installée, lancer `doctor`, puis `run`, vérifier ready, et seulement ensuite terminer la création du plugin ChatGPT avec `Sans authentification`.
+
+
+## 30 septembre 2026 — téléchargement du client tunnel en cours
+
+Martin est arrivé sur la release officielle `openai/tunnel-client v0.0.15` dans GitHub après avoir cliqué sur `Download tunnel-client` depuis OpenAI Platform. La page affiche les assets macOS arm64/amd64 et les variantes runtime.
+
+Pour ce chantier, utiliser le **client complet** `tunnel-client-v0.0.15-darwin-arm64.zip`, pas `tunnel-client-runtime-cloudflared-...`, car la suite requiert les commandes d'administration/profil `init`, `doctor` et `run`. Le Mac de Martin est Apple Silicon (Homebrew sous `/opt/homebrew` observé plus tôt), donc `darwin-arm64`.
+
+Étape suivante : télécharger le ZIP complet arm64, puis vérifier/installler le binaire sur le Mac avant de créer le profil `robot-seo-bug-gl`.
