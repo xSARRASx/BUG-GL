@@ -119,3 +119,10 @@ Résultat réel :
 La release GitHub v0.0.15 est plus récente mais n'est pas encore la formule Homebrew courante observée. La version Homebrew supportée suffit pour la suite ; ne pas installer le ZIP manuellement.
 
 Étape suivante : créer une Runtime API key **Restricted** avec Tunnels **Read + Use**, jamais Manage/Admin pour le daemon. La clé reste hors du chat et hors du dépôt.
+
+
+## Runtime API key créée — valeur non partagée
+
+Martin confirme la création de la clé Runtime API destinée au daemon `tunnel-client`. Aucun secret n'a été copié dans le chat ni dans le dépôt.
+
+Suite : injecter la clé localement par saisie masquée dans le Terminal, définir le tunnel ID dédié, créer le profil stdio vers le serveur MCP installé, puis valider avec `doctor --explain`.
