@@ -134,3 +134,14 @@ Martin est arrivé sur la release officielle `openai/tunnel-client v0.0.15` dans
 Pour ce chantier, utiliser le **client complet** `tunnel-client-v0.0.15-darwin-arm64.zip`, pas `tunnel-client-runtime-cloudflared-...`, car la suite requiert les commandes d'administration/profil `init`, `doctor` et `run`. Le Mac de Martin est Apple Silicon (Homebrew sous `/opt/homebrew` observé plus tôt), donc `darwin-arm64`.
 
 Étape suivante : télécharger le ZIP complet arm64, puis vérifier/installler le binaire sur le Mac avant de créer le profil `robot-seo-bug-gl`.
+
+
+## 30 septembre 2026 — correction d'installation tunnel-client sur macOS
+
+Le ZIP complet arm64 a bien été téléchargé et inspecté : il contient `tunnel-client` et `cloudflared`. Après vérification du README officiel `openai/tunnel-client` v0.0.15, le chemin **supporté sur macOS est Homebrew** :
+
+`brew install openai/tools/tunnel-client`
+
+Les ZIP de release ne sont pas notarifiés et peuvent être bloqués par Gatekeeper ; ne pas contourner avec `xattr`, `spctl` ou « Open Anyway ». Le ZIP téléchargé peut rester dans Downloads mais ne doit pas être utilisé pour installer manuellement le binaire.
+
+Prochaine action : installer via Homebrew, puis vérifier `tunnel-client --version` et `tunnel-client help quickstart`. Ensuite créer une clé Runtime API restreinte Tunnels Read + Use et initialiser le profil stdio.
