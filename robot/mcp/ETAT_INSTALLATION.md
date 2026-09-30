@@ -126,3 +126,14 @@ La release GitHub v0.0.15 est plus récente mais n'est pas encore la formule Hom
 Martin confirme la création de la clé Runtime API destinée au daemon `tunnel-client`. Aucun secret n'a été copié dans le chat ni dans le dépôt.
 
 Suite : injecter la clé localement par saisie masquée dans le Terminal, définir le tunnel ID dédié, créer le profil stdio vers le serveur MCP installé, puis valider avec `doctor --explain`.
+
+
+## Profil local stdio créé — confirmé
+
+Commande `tunnel-client init` réussie. Profil :
+`/Users/more/.config/tunnel-client/robot-seo-bug-gl.yaml`
+
+Sample : `sample_mcp_stdio_local`.
+La configuration cible le serveur MCP Robot SEO installé et son journal privé.
+
+Étape suivante : exécuter `tunnel-client doctor --profile robot-seo-bug-gl --explain` dans le même Terminal où `CONTROL_PLANE_API_KEY` est exportée. Ne pas démarrer le daemon avant doctor concluant.
