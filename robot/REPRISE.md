@@ -158,3 +158,10 @@ Martin a exécuté sur son Mac :
 La release GitHub v0.0.15 existe mais le tap Homebrew supporté sert encore 0.0.14. Ne pas contourner Gatekeeper avec le ZIP ; utiliser la version Homebrew tant qu'elle fournit le parcours requis.
 
 Prochaine étape exacte : créer une **Runtime API key** restreinte avec permissions Tunnels Read + Use depuis Organization settings → API keys. Ne pas utiliser une Admin key ni une clé All. Ne jamais coller la clé dans le chat. Ensuite initialiser le profil `robot-seo-bug-gl` avec le tunnel ID dédié et la commande stdio installée.
+
+
+## 30 septembre 2026 — clé Runtime créée
+
+Martin confirme avoir créé la clé Runtime API pour le tunnel Robot SEO. La valeur de la clé n'a pas été partagée dans la conversation et ne doit jamais être enregistrée dans GitHub.
+
+Étape suivante : dans le Terminal Mac, charger la clé uniquement dans l'environnement de la session avec une saisie masquée, charger le tunnel ID dédié `robot-seo-bug-gl`, initialiser le profil stdio `robot-seo-bug-gl`, puis exécuter `tunnel-client doctor --profile robot-seo-bug-gl --explain`. Ne pas démarrer le plugin ChatGPT avant un doctor réussi.
