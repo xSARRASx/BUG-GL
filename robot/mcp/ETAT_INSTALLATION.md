@@ -106,3 +106,16 @@ Après installation :
 `tunnel-client help quickstart`
 
 Le ZIP `tunnel-client-v0.0.15-darwin-arm64.zip` téléchargé est correct mais ne sera pas utilisé pour l'installation manuelle.
+
+
+## tunnel-client Homebrew vérifié sur le Mac
+
+Résultat réel :
+- Homebrew tap `openai/tools` à jour ;
+- version installée : `0.0.14+0f870e50a973fa820d4c409000059e181e8d242b` ;
+- `tunnel-client help quickstart` OK ;
+- commandes nécessaires visibles : `init`, `doctor`, `run`, gestion des profils et Runtime API keys.
+
+La release GitHub v0.0.15 est plus récente mais n'est pas encore la formule Homebrew courante observée. La version Homebrew supportée suffit pour la suite ; ne pas installer le ZIP manuellement.
+
+Étape suivante : créer une Runtime API key **Restricted** avec Tunnels **Read + Use**, jamais Manage/Admin pour le daemon. La clé reste hors du chat et hors du dépôt.
