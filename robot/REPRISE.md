@@ -116,3 +116,12 @@ Le cron est configuré aux minutes `7,22,37,52`. Le démarrage autonome est dém
 Le journal MCP se partage entre les conversations qui appellent la même instance installée sur le Mac et la même base privée. Le Mac et le tunnel doivent rester disponibles. Le MCP ne reçoit pas spontanément tous les messages : l'agent doit enregistrer les décisions importantes par checkpoint.
 
 Aucun site, statut, règle Firebase ou réglage du robot historique n'a été modifié par la mise en place du connecteur.
+
+
+## 30 septembre 2026 — tunnel Robot SEO créé dans OpenAI Platform
+
+Preuve visuelle fournie par Martin : dans OpenAI Platform → Organization settings → Tunnels, une nouvelle ligne `robot-seo-bug-gl` apparaît, séparée de `guestlucky-code-prod-lecture-seule`, associée à l'organisation Personal et au workspace ChatGPT personnel. Le tunnel dédié existe donc côté OpenAI Platform.
+
+Le tunnel n'est pas encore relié au serveur local : `tunnel-client` reste à télécharger/configurer sur le Mac, puis à passer en état ready avant de créer le plugin ChatGPT. Ne pas déclarer le connecteur opérationnel avant ce test.
+
+Prochaine action exacte : utiliser le bouton `Download tunnel-client` de la page Tunnels, installer/exécuter le client sur le Mac, configurer un profil local stdio avec le nouveau tunnel Robot SEO et la commande MCP installée, lancer `doctor`, puis `run`, vérifier ready, et seulement ensuite terminer la création du plugin ChatGPT avec `Sans authentification`.
