@@ -1,73 +1,80 @@
 # Installation du connecteur Robot SEO
 
 Dernière mise à jour : 30 septembre 2026.
-Départ du chantier : `7e2589fbd791d604f2cc44df7148f8ef5e989158`.
 Périmètre : `xSARRASx/BUG-GL`, dossier `robot/mcp`, branche `claude/amazing-euler-U7YqQ`.
 
-## Verdict actuel
+## VERDICT ACTUEL
 
-**Le code du connecteur est construit, testé dans l'environnement de travail et enregistré dans GitHub. Il n'est PAS installé sur le Mac, PAS déployé sur un hébergement permanent et PAS ajouté aux connexions ChatGPT.**
+**Le connecteur est maintenant installé sur le vrai Mac de Martin. Il n'est pas encore connecté à ChatGPT : le Secure MCP Tunnel dédié Robot SEO reste à créer puis à démarrer.**
 
-Ne pas confondre serveur prêt à installer, processus de test local et connexion opérationnelle accessible à une nouvelle conversation.
+Preuve Terminal du Mac, 30 septembre 2026 :
+- commande : `python3 robot/mcp/install.py` depuis `/Users/more/BUG-GL` ;
+- 75 tests : OK, 6,988 s ;
+- `installe_sur_mac: true` ;
+- `version_source: cce238d41d5f341e` ;
+- configuration client : `/Users/more/Library/Application Support/RobotSEO-MCP/client-config.json` ;
+- journal privé : `/Users/more/Library/Application Support/RobotSEO-MCP/state` ;
+- sauvegarde SQLite créée ;
+- `enregistre_codex: false` ;
+- `connecte_chatgpt: false` ;
+- `tunnel_securise_installe: false` ;
+- `aucun_site_modifie: true`.
 
-## Réalisé et vérifié
+## Interface OpenAI vérifiée
 
-- Serveur Python autonome `server.py` : neuf outils MCP, deux ressources et un prompt de reprise. Transport stdio ; transport HTTP JSON facultatif limité à la boucle locale et protégé par un jeton privé.
-- Lecture GitHub restreinte au Robot SEO : HEAD, configuration au même SHA, documents autorisés et résumés des exécutions. Les réponses incluent dates, provenance et limites de lecture.
-- Journal SQLite privé, hors dépôt : checkpoints versionnés, historique conservé, reçus idempotents, réservation des tâches, refus des écrasements concurrents et suivi des résultats incertains.
-- Script `install.py` pour le vrai Mac : copie versionnée, journal et secrets existants préservés, configuration client, option d'enregistrement Codex sans remplacement d'une connexion existante.
-- Procédure réutilisable `skills/reprise-robot-seo/SKILL.md` ; documentation, sauvegarde SQLite et exclusions Git.
-- **75 tests réussis**, dernière exécution : `python3 -m unittest test_server -v`, Python 3.13.5, Linux isolé, durée 8,589 secondes. Tests de redémarrage de processus, concurrence entre processus, idempotence, recherche paginée, protection des tâches et transports sur de vrais sockets locaux.
-- Identité vérifiée entre les sources testées localement et les blobs GitHub : serveur `4493a6a79d947f8788e9ca4366afa0426ce52a42`, tests `3b7fa488c96b4ade61b13e61efd311f2ed2199ee`, installateur `4be0e3dd49d3188e0f18954eb6f2ed4e0a6b7ac0`.
-- Le refus d'installation hors Mac a été exercé : le script s'arrête sur Linux sans prétendre configurer le Mac.
+ChatGPT :
+- page Plugins disponible ;
+- `Ajouter → Créer une application MCP` disponible ;
+- mode de connexion `Tunnel` disponible ;
+- nom actuellement saisi : `robot-seo-bug-gl` ;
+- menu d'authentification disponible avec `OAuth`, `Sans authentification`, `OAuth ou sans authentification`.
 
-## Ce que ces tests ne prouvent pas
+OpenAI Platform :
+- `Organization settings → Tunnels` disponible ;
+- un ancien tunnel `guestlucky-code-prod-lecture-seule` existe ;
+- **ne pas réutiliser, modifier ou supprimer ce tunnel** pour ce chantier.
 
-Les lectures GitHub du serveur sont testées avec des réponses fictives. Les accès réels aux sources via le connecteur GitHub de cette conversation ne prouvent pas la connectivité réseau du futur serveur. L'environnement de construction ne permettait pas l'installation du SDK MCP officiel par pip ni une lecture GitHub depuis Python, à cause d'une résolution réseau indisponible.
+Au dernier écran observé, aucun tunnel Robot SEO dédié n'était encore sélectionnable dans ChatGPT. Le champ tunnel de la nouvelle application était encore vide et seul l'ancien tunnel GuestLucky était suggéré.
 
-La V1 implémente un sous-ensemble MCP explicite avec la bibliothèque standard. Aucun test avec MCP Inspector, un tunnel OpenAI réel ou une nouvelle conversation ChatGPT n'est revendiqué. Les 212 tests historiques du robot ne sont pas réexécutés par cette suite ; le code historique du robot n'a pas été modifié.
+## Choix d'authentification V1
 
-## Blocage exact
+Choisir **`Sans authentification`** dans la fenêtre ChatGPT pour cette V1.
 
-Le terminal fourni à l'assistant est un environnement Linux isolé, pas le terminal du Mac de Martin. Les actions Plugin Management présentes permettent de consulter ou régler des permissions, mais pas d'installer une nouvelle connexion ni d'approuver la connexion ChatGPT.
+Motif : le serveur `robot/mcp/server.py` ne fournit pas de flux OAuth utilisateur. Le Secure MCP Tunnel authentifie séparément `tunnel-client` auprès du control plane OpenAI avec sa clé runtime. Choisir OAuth dans ChatGPT ferait annoncer un mécanisme que le serveur n'implémente pas.
 
-L'unique projet Supabase découvert appartient à Leapway et n'a pas été utilisé. Aucun tunnel, secret ou serveur de production GuestLucky n'a été réutilisé. Aucun service payant, projet cloud, nouvel accès externe ou permission globale n'a été créé.
+Ne jamais coller de clé API, token, mot de passe ou code d'appareil dans une conversation.
 
-## Nouvelle tentative du 30 septembre 2026 — même blocage
+## Étapes restantes exactes
 
-Une session ultérieure a reçu la consigne de reprendre l'installation et de la mener
-jusqu'à la connexion ChatGPT. Elle disposait du même type d'environnement : **Ubuntu
-24.04 x86_64, Python 3.11.15, aucun `~/Library`.** Ce n'est pas le Mac de Martin.
+1. Dans ChatGPT, sélectionner `Sans authentification`, mais **ne pas cliquer Créer** tant que le tunnel dédié n'existe pas et n'est pas sain.
+2. Dans OpenAI Platform → Organization settings → Tunnels, cliquer `Créer un tunnel`.
+3. Créer un tunnel dédié nommé `robot-seo-bug-gl`, associé au contexte personnel/ChatGPT approprié. Ne toucher à aucun tunnel GuestLucky.
+4. Télécharger/utiliser le `tunnel-client` officiel sur le Mac.
+5. Initialiser un profil local stdio avec le nouveau `tunnel_id` et la commande MCP installée. Garder la clé runtime dans l'environnement/stockage privé, jamais dans GitHub ou le chat.
+6. Exécuter `tunnel-client doctor --profile <profil> --explain`.
+7. Exécuter `tunnel-client run --profile <profil>` et vérifier l'état healthy/ready.
+8. Revenir dans ChatGPT, sélectionner ou coller le nouveau `tunnel_id`, garder `Sans authentification`, accepter l'avertissement puis créer l'application.
+9. Tester `reprendre_robot` dans la conversation actuelle.
+10. Test de continuité obligatoire avant « terminé » : conversation A enregistre un checkpoint fictif ; conversation B retrouve le même `journal_id`, la version et la prochaine étape. Tester une réponse perdue et un conflit de version sans toucher aux sites clients.
+11. Mettre `robot/REPRISE.md` et ce fichier à jour avec les preuves de bout en bout.
 
-Vérifications refaites au HEAD `462e7c17ebb2f2be25bb89d5fcb0431c176d1265` :
+## Sécurité et périmètre
 
-- `python3 -m unittest test_server` → **75 tests, OK**, 7,347 s ;
-- `node scripts/selftest.js` (robot historique) → **212 tests, OK** ;
-- `python3 robot/mcp/install.py --register-codex` → refus attendu :
-  « Installation Mac refusée : ce terminal n'est pas celui d'un Mac. », code 1.
+Le MCP V1 lit GitHub et tient un journal privé local. Il n'expose aucune écriture GitHub/Firebase/WordPress et aucun déclenchement de workflow. La création du tunnel ne change pas ces permissions.
 
-Le garde-fou de l'installateur fonctionne donc toujours. Aucune installation, aucun
-tunnel, aucune connexion ChatGPT, aucun test en conversation réelle n'a pu être
-exécuté. Rien n'a été modifié dans le dépôt en dehors de cette note.
+Aucun service payant ne doit être activé pour cette installation. Aucun tunnel ou secret de Leapway/GuestLucky production ne doit être réutilisé.
 
-Le blocage n'est pas un défaut du paquet : il est structurel. Un conteneur cloud ne
-peut pas installer un programme sur la machine de quelqu'un d'autre, ni créer un
-tunnel depuis cette machine, ni approuver une connexion dans son interface ChatGPT.
-Les étapes 2 à 6 ci-dessous exigent un terminal réellement situé sur le Mac.
+Le Mac doit rester allumé et `tunnel-client` actif pour que ChatGPT atteigne ce serveur local. Deux copies du journal sur deux machines ne se synchronisent pas.
 
-## Prochaine étape pour une session ayant réellement accès au Mac
+## Réalisé avant l'installation Mac
 
-1. Lire ce fichier, `robot/AGENTS.md`, `robot/REPRISE.md` et `robot/mcp/README.md`. Vérifier le dépôt, la branche et le HEAD réel ; préserver tout travail concurrent.
-2. Vérifier la présence de Python 3.11+ et du terminal Mac. Lancer `python3 robot/mcp/install.py` dans la copie autorisée du dépôt. Aucun sudo. Ne pas créer une deuxième base si un journal existe déjà.
-3. Connecter le programme stdio installé à un Secure MCP Tunnel dédié au Robot SEO, avec les autorisations du compte et sans réutiliser les tunnels des autres projets. Vérifier la disponibilité de cette fonction sur le compte. Ne pas publier le serveur HTTP local tel quel sur Internet.
-4. Enregistrer et autoriser la connexion dans ChatGPT. Si une confirmation utilisateur est indispensable, demander uniquement cette confirmation ; aucun mot de passe ni token dans la conversation.
-5. Tester avec un client MCP réel puis deux nouvelles conversations : la première enregistre un checkpoint fictif ; la seconde relit le même `journal_id`, la même version et la prochaine étape. Tester aussi une réponse perdue et un conflit de version, sans toucher aux clients.
-6. Mettre ce document et `robot/REPRISE.md` à jour avec les preuves réelles. Ne passer à « connecté et terminé » qu'après ce test de bout en bout.
+Le serveur, ses neuf outils MCP, deux ressources, un prompt de reprise, SQLite versionné/idempotent, l'installateur et 75 tests avaient déjà été construits et testés dans un environnement Linux isolé. Une session ultérieure avait aussi revérifié 212/212 tests du robot historique. Ces vérifications restent historiques ; la preuve Mac ci-dessus est désormais l'état d'installation pertinent.
 
-## Limites de continuité
+## À ne pas faire
 
-Le journal se partage entre les conversations qui appellent la même instance du serveur avec la même base sur une machine persistante. Deux copies sur deux machines ne se synchronisent pas. Avec un hébergement sur le Mac, il faut que le Mac et son tunnel restent disponibles.
-
-Ce MCP ne reçoit pas spontanément tous les messages : l'agent doit enregistrer les décisions importantes par checkpoint. Il n'a pas de commande de correction WordPress, de lancement de workflow ou d'accès aux fiches Firebase privées. La mention « connecté au robot » désigne ici sa lecture GitHub, pas une ouverture de droits métier.
-
-Aucun site, statut, règle Firebase ou réglage du robot n'a été modifié dans ce chantier.
+- ne pas cliquer sur l'ancien tunnel `guestlucky-code-prod-lecture-seule` ;
+- ne pas sélectionner OAuth pour cette V1 ;
+- ne pas cliquer `Créer` dans ChatGPT avant que le tunnel Robot SEO soit créé et ready ;
+- ne pas publier le serveur HTTP local ;
+- ne pas coller de secret dans le chat ;
+- ne pas modifier Firebase, WordPress, les statuts ou les règles du robot pendant le branchement MCP.
