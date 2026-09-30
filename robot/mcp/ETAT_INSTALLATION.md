@@ -78,3 +78,10 @@ Le serveur, ses neuf outils MCP, deux ressources, un prompt de reprise, SQLite v
 - ne pas publier le serveur HTTP local ;
 - ne pas coller de secret dans le chat ;
 - ne pas modifier Firebase, WordPress, les statuts ou les règles du robot pendant le branchement MCP.
+
+
+## Tunnel Platform créé — confirmé visuellement
+
+Le 30 septembre 2026, Martin a créé avec succès le tunnel OpenAI Platform dédié `robot-seo-bug-gl`. Il apparaît dans la liste Tunnels à côté de l'ancien tunnel GuestLucky, sans remplacement ni modification de celui-ci. L'association organisation/workspace est visible dans Platform.
+
+État après création : tunnel hébergé créé côté OpenAI, mais aucun `tunnel-client` local n'est encore attesté comme connecté/ready. Étape suivante : télécharger `tunnel-client` depuis Platform, configurer le profil stdio vers le serveur MCP installé sur le Mac, exécuter `doctor` puis `run`, et vérifier la readiness avant de créer le plugin ChatGPT.
