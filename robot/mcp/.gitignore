@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.sqlite*
+*.db
+.env*
+http-token
+state/
+backups/
+client-config.json
+installation.json
