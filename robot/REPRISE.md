@@ -165,3 +165,17 @@ Prochaine étape exacte : créer une **Runtime API key** restreinte avec permiss
 Martin confirme avoir créé la clé Runtime API pour le tunnel Robot SEO. La valeur de la clé n'a pas été partagée dans la conversation et ne doit jamais être enregistrée dans GitHub.
 
 Étape suivante : dans le Terminal Mac, charger la clé uniquement dans l'environnement de la session avec une saisie masquée, charger le tunnel ID dédié `robot-seo-bug-gl`, initialiser le profil stdio `robot-seo-bug-gl`, puis exécuter `tunnel-client doctor --profile robot-seo-bug-gl --explain`. Ne pas démarrer le plugin ChatGPT avant un doctor réussi.
+
+
+## 30 septembre 2026 — profil tunnel-client créé sur le Mac
+
+Martin a exécuté avec succès `tunnel-client init` pour le profil `robot-seo-bug-gl`.
+Résultat confirmé :
+- profil créé dans `/Users/more/.config/tunnel-client/robot-seo-bug-gl.yaml` ;
+- sample utilisé : `sample_mcp_stdio_local` ;
+- tunnel ID injecté depuis l'environnement local ;
+- commande MCP pointe vers le serveur installé dans `~/Library/Application Support/RobotSEO-MCP/versions/cce238d41d5f341e/server.py` et le journal privé `~/Library/Application Support/RobotSEO-MCP/state`.
+
+La clé Runtime reste hors du chat et hors du dépôt.
+
+Prochaine étape exacte : `tunnel-client doctor --profile robot-seo-bug-gl --explain`. Ne pas lancer `run` avant validation du doctor.
