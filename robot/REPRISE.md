@@ -3,27 +3,66 @@
 Dernière mise à jour : 30 septembre 2026.
 Périmètre exclusif : Robot SEO dans `xSARRASx/BUG-GL`.
 
+## DERNIER CHECKPOINT CONFIRMÉ — Mac installé, création du tunnel en cours
+
+Ce bloc est prioritaire sur les états historiques plus bas.
+
+Le 30 septembre 2026, Martin a installé la V1 du connecteur sur son vrai Mac depuis `/Users/more/BUG-GL` avec :
+
+`python3 robot/mcp/install.py`
+
+Preuves copiées depuis le Terminal :
+- 75 tests MCP réussis en 6,988 s ;
+- `installe_sur_mac: true` ;
+- `version_source: cce238d41d5f341e` ;
+- journal privé : `/Users/more/Library/Application Support/RobotSEO-MCP/state` ;
+- configuration client : `/Users/more/Library/Application Support/RobotSEO-MCP/client-config.json` ;
+- sauvegarde SQLite créée par l'installateur ;
+- `enregistre_codex: false` ;
+- `connecte_chatgpt: false` ;
+- `tunnel_securise_installe: false` ;
+- `aucun_site_modifie: true`.
+
+Dans ChatGPT, Martin a confirmé que l'interface Plugins permet `Ajouter → Créer une application MCP`. La fenêtre de création accepte une connexion `Tunnel`.
+
+Dans OpenAI Platform, `Organization settings → Tunnels` est accessible. Un ancien tunnel nommé `guestlucky-code-prod-lecture-seule` existe déjà : **ne pas le réutiliser ni le modifier** pour le Robot SEO.
+
+État exact au moment du checkpoint :
+- la fenêtre ChatGPT `Nouveau plugin` est ouverte ;
+- nom saisi : `robot-seo-bug-gl` ;
+- connexion sélectionnée : `Tunnel` ;
+- le champ tunnel Robot SEO n'est pas encore rempli ;
+- seul l'ancien tunnel GuestLucky est visible dans les suggestions ;
+- la case d'avertissement `Je comprends et souhaite continuer` est cochée ;
+- le menu Authentification est ouvert et affiche `OAuth`, `Sans authentification`, `OAuth ou sans authentification`;
+- **ne pas cliquer Créer tant qu'un tunnel Robot SEO dédié n'a pas été créé et relié au tunnel-client du Mac**.
+
+Choix d'authentification prévu pour cette V1 : `Sans authentification` côté application MCP. Le serveur V1 n'implémente pas OAuth utilisateur ; l'authentification du transport OpenAI ↔ tunnel-client est séparée. Ne pas sélectionner OAuth par défaut en prétendant qu'il est pris en charge.
+
+Prochaine action exacte :
+1. Dans la fenêtre ChatGPT actuelle, choisir `Sans authentification`, puis ne pas cliquer `Créer`.
+2. Revenir dans OpenAI Platform → Organization settings → Tunnels.
+3. Cliquer `Créer un tunnel` et créer un tunnel **dédié** nommé `robot-seo-bug-gl`, associé au contexte personnel/ChatGPT approprié. Ne toucher à aucun tunnel GuestLucky existant.
+4. Installer/initialiser `tunnel-client` sur le Mac avec ce nouveau `tunnel_id` et la commande stdio du serveur installé ; conserver toute clé API/runtime hors du chat.
+5. Exécuter `tunnel-client doctor --profile <profil> --explain`, puis `tunnel-client run --profile <profil>` et vérifier qu'il est ready.
+6. Revenir dans ChatGPT, sélectionner/coller le nouveau `tunnel_id`, garder `Sans authentification`, créer l'application puis tester `reprendre_robot`.
+7. Tester ensuite deux nouvelles conversations avec le même `journal_id` et un checkpoint fictif avant de dire « terminé ».
+
+Ne pas générer ou coller de token dans la conversation. Ne pas réutiliser l'ancien tunnel GuestLucky. Ne pas modifier Firebase, WordPress, les statuts, le workflow ou un budget pendant ce branchement.
+
 ## Dernier point confirmé — connecteur MCP construit, installation restante
+
+Cette entrée est historique : l'installation Mac a depuis été effectuée, voir le checkpoint ci-dessus.
 
 Cette entrée complète et actualise les états historiques ci-dessous. À la demande actuelle de Martin de réaliser le connecteur, le serveur et son paquet d'installation ont été créés dans `robot/mcp/`. **75 tests ont réussi dans l'environnement Linux isolé** : journal durable, reprise après redémarrage, concurrence, idempotence et transports MCP locaux. Le code et les tests ont été enregistrés dans GitHub et leurs blobs ont été comparés aux fichiers testés.
 
-**Le serveur n'est pas installé sur le Mac, aucun tunnel MCP dédié n'a été créé et aucune nouvelle connexion ChatGPT n'a été installée.** L'environnement accessible était Linux, pas le terminal de l'ordinateur de Martin. Le connecteur n'est donc pas encore utilisable depuis une nouvelle conversation.
-
-Lire en priorité `robot/mcp/ETAT_INSTALLATION.md` pour les preuves, les limites et la procédure restante, puis `robot/mcp/README.md`. Prochaine action : depuis une session ayant réellement accès au Mac, exécuter l'installation préparée, configurer un tunnel dédié autorisé et vérifier la reprise dans deux nouvelles conversations. Ne pas redévelopper le serveur ni recréer les données déjà enregistrées.
+Lire en priorité `robot/mcp/ETAT_INSTALLATION.md` pour les preuves, les limites et la procédure restante, puis `robot/mcp/README.md`.
 
 Le MCP V1 permet la consultation GitHub du Robot SEO et la tenue d'un journal privé sur sa machine hôte. Il n'expose aucune écriture GitHub/Firebase/WordPress et aucun déclenchement de workflow. Aucun service payant ou infrastructure d'un autre projet n'a été activé. Le code, la configuration et le workflow du robot historique restent inchangés par ce chantier.
 
 ## Vérification du 30 septembre 2026 — installation toujours impossible depuis un conteneur
 
-Une session ultérieure a tenté de mener l'installation jusqu'au bout. Même
-environnement Linux isolé, pas le Mac. Au HEAD `462e7c1` : 75 tests MCP réussis,
-212 tests du robot historique réussis, et `install.py --register-codex` refusé comme
-prévu hors Mac. Le paquet reste sain ; l'obstacle est l'absence d'accès à la machine
-de Martin, pas le code.
-
-Statut inchangé : connecteur **construit et testé**, **non installé**, **non connecté**.
-Ne pas annoncer une reprise opérationnelle entre conversations tant que le test
-décrit à l'étape 5 de `robot/mcp/ETAT_INSTALLATION.md` n'a pas réellement eu lieu.
+Historique : une session cloud a tenté de mener l'installation jusqu'au bout et a confirmé que son environnement Linux isolé n'était pas le Mac. Au HEAD `462e7c1` : 75 tests MCP réussis, 212 tests du robot historique réussis, et `install.py --register-codex` refusé comme prévu hors Mac. Ce bloc est désormais dépassé pour l'installation elle-même, puisque Martin a ensuite exécuté l'installateur sur son Mac.
 
 ## À lire à chaque reprise
 
@@ -39,7 +78,6 @@ Ne pas confondre ce chantier avec `site-seb-`, la production de l'application Gu
 ## État à la dernière vérification du robot historique
 
 `robot/config.json`, relu au SHA de référence le 30 septembre 2026 :
-
 - `dryRun: true` ;
 - `autoTermine: false` ;
 - `allowScheduledActive: false` ;
@@ -49,8 +87,6 @@ Ne pas confondre ce chantier avec `site-seb-`, la production de l'application Gu
 - `allowedTestIds` reste limité à la fiche fictive déjà indiquée dans la configuration.
 
 L'audit public est développé ; les corrections WordPress autonomes ne sont pas activées. En dry-run, les rapports détaillés ne sont pas écrits dans Firebase, et les statuts ne sont pas modifiés par le robot. Il n'y a pas de modèle d'IA appelé dans l'audit déterministe de référence.
-
-La connexion et la configuration existantes doivent être vérifiées, pas recréées. Ne jamais demander de recopier un mot de passe dans la conversation.
 
 ## Preuves de fonctionnement déjà observées
 
@@ -64,60 +100,19 @@ Derniers passages automatiques confirmés dans le suivi du 30 septembre 2026, to
 
 Journal détaillé déjà examiné : run 19, job `109712501341`. Il indiquait 212 tests réussis, 4 fiches à faire examinées, 3 admissibles, 1 bloquée pour accès WordPress incomplets, 2 sites audités, aucun audit impossible, aucune écriture Firebase. Les audits avaient porté sur 9 et 7 pages. Ce sont des observations datées, pas le décompte actuel des clients ni une certification SEO.
 
-Le cron est configuré aux minutes `7,22,37,52`. Le démarrage autonome est démontré ; sa régularité toutes les quinze minutes ne l'est pas. Les passages observés étaient espacés de plusieurs heures. La congestion a été évoquée comme hypothèse, pas établie comme cause. Un déclencheur externe a été proposé, mais aucun déploiement externe n'est attesté dans ce point de reprise.
-
-## Où reprendre maintenant
-
-Dernière étape confirmée : connecteur de continuité MCP construit et testé localement ; détails dans `robot/mcp/ETAT_INSTALLATION.md`. L'audit public historique a déjà été exécuté automatiquement en lecture seule.
-Action d'écriture distante en attente de confirmation : aucune action métier enregistrée dans ce point de reprise.
-Prochaine étape : installation du connecteur sur une machine persistante autorisée, connexion et test dans de nouvelles conversations. Ne pas confondre ce travail avec la correction WordPress, qui n'est pas activée.
-Travail restant sur le robot : régularité et couverture des audits ; exploitation des résultats ; puis conception et essai d'un parcours de correction WordPress sur un site pilote avec sauvegarde et contrôle après modification. Cela nécessite encore une implémentation et une validation : ne pas l'annoncer comme acquis. Ne pas relancer un ancien run actif.
+Le cron est configuré aux minutes `7,22,37,52`. Le démarrage autonome est démontré ; sa régularité toutes les quinze minutes ne l'est pas. Les passages observés étaient espacés de plusieurs heures. La congestion a été évoquée comme hypothèse, pas établie comme cause.
 
 ## Protocole pour ne pas perdre la progression
 
 1. Avant une opération importante autorisée, enregistrer ici ou dans un journal approprié : objectif, périmètre, référence de départ, état `préparée` ou `en cours`, résultat attendu et méthode permettant de constater si l'opération a eu lieu. Aucune donnée client dans ce dépôt public.
 2. Après l'opération, enregistrer le résultat seulement après confirmation : commit, test, run ou référence de preuve. Distinguer `préparée`, `exécutée`, `vérifiée`, `bloquée`, `résultat incertain`.
-3. Mettre à jour la dernière étape confirmée et la prochaine action à chaque lot significatif. Pour du code, inclure ce point de reprise avec le lot lorsque c'est possible. Ne pas attendre la fin du fil.
-4. En cas de coupure au milieu d'une opération, relire ce fichier et vérifier l'état réel du service. Ne pas supposer qu'une absence de réponse signifie un échec. Ne pas répéter une écriture dont le résultat est incertain avant vérification.
-5. Lire la version courante avant d'écrire. Utiliser son SHA pour une mise à jour de fichier. Si un autre assistant a travaillé entre-temps, préserver ses changements ; demander avant une fusion ambiguë. Aucun écrasement forcé.
-6. Conserver un historique bref ci-dessous ; les anciennes demandes restent historiques. Ne jamais réactiver un test ou une permission sur la seule foi d'une entrée ancienne.
-
-## Vérifications de reprise
-
-- Lire la branche réelle et `robot/config.json` ; comparer les références, sans revenir automatiquement à une ancienne version.
-- Lire les runs via `GET /repos/xSARRASx/BUG-GL/actions/runs?event=schedule&per_page=20`. Pour les détails, lire les jobs et leurs logs. Vérifier le SHA exécuté ; un voyant vert n'est pas la preuve qu'un site a été audité.
-- Les données métier restent dans le stockage autorisé ; les rapports clients, accès, coordonnées, tokens et notes ne doivent jamais être copiés dans ce fichier, dans un commit ou dans les logs publics.
-- Une action client incertaine doit être vérifiée dans le service concerné avec les accès autorisés. Ne pas déduire l'identité d'un client depuis l'ordre d'une liste anonymisée.
-- Les suppressions et fusions ambiguës requièrent confirmation. Le passage en mode actif, la modification des règles et les dépenses ne sont pas autorisés par ce document.
+3. Mettre à jour la dernière étape confirmée et la prochaine action à chaque lot significatif. Ne pas attendre la fin du fil.
+4. En cas de coupure au milieu d'une opération, relire ce fichier et vérifier l'état réel du service. Ne pas supposer qu'une absence de réponse signifie un échec.
+5. Lire la version courante avant d'écrire. Si un autre assistant a travaillé entre-temps, préserver ses changements ; demander avant une fusion ambiguë. Aucun écrasement forcé.
+6. Ne jamais réactiver un test ou une permission sur la seule foi d'une entrée ancienne.
 
 ## Limites réelles de cette continuité
 
-Ce fichier ne s'actualise pas tout seul : l'assistant ou l'agent qui travaille doit l'entretenir pendant son travail. Sa création n'ajoute pas de sauvegarde automatique de chaque message, ne synchronise pas un ordinateur local et ne modifie pas les réglages de mémoire de ChatGPT.
+Le journal MCP se partage entre les conversations qui appellent la même instance installée sur le Mac et la même base privée. Le Mac et le tunnel doivent rester disponibles. Le MCP ne reçoit pas spontanément tous les messages : l'agent doit enregistrer les décisions importantes par checkpoint.
 
-Une nouvelle conversation doit lire ce point d'entrée avec un accès autorisé au dépôt. La reprise est fondée sur le dernier état durable enregistré et sur la vérification de l'état réel, pas sur une promesse de mémoire mot pour mot. Les journaux et commits ne garantissent pas encore une reprise automatique exactement une fois pour de futures écritures WordPress : cette protection devra être construite avec le parcours d'écriture.
-
-## Journal de continuité
-
-### 30 septembre 2026 — continuité entre conversations
-
-Ajout documentaire uniquement. Objectif : permettre une reprise même si le fil s'interrompt sans préparation de fin de session. Aucun code du robot, réglage Firebase, workflow, statut ou site client modifié par cet ajout. La note de passation datée reste un instantané historique ; le présent chemin stable sert de point d'entrée pour les prochaines mises à jour.
-
-### 30 septembre 2026 — clarification : un connecteur partagé, pas seulement une note
-
-Demande actuelle au moment de cette clarification : permettre à de nombreuses nouvelles conversations de se connecter au même Robot SEO, de retrouver ses règles et son état courant, puis de reprendre le travail même après une coupure imprévue. La demande porte à la fois sur la continuité du contexte et sur l'accès réel au robot. Un fichier à recopier manuellement n'est pas une réponse suffisante.
-
-Architecture proposée lors de cette clarification, avant la construction décrite en tête du fichier :
-
-- Un serveur MCP dédié au Robot SEO, authentifié, relié aux sources autorisées (code, configuration et exécutions GitHub ; état métier privé seulement avec les droits adaptés).
-- Une procédure de reprise distribuée avec le connecteur : appeler un outil de démarrage tel que `reprendre_robot`, recevoir les règles actuelles, les permissions effectives, les opérations confirmées ou incertaines, les preuves datées et la prochaine étape ; puis récupérer les détails utiles à la demande.
-- Un historique durable et interrogeable. Ne pas pousser 100 000 lignes dans chaque conversation : fournir un dossier de démarrage borné, un index et une lecture paginée/recherche des archives, sans présenter ce résumé comme la lecture exhaustive de l'historique.
-- Un journal d'opérations enregistré par le serveur avant et après chaque action effectuée par ce connecteur. Une interruption du chat ne doit pas supprimer le suivi de l'opération. Les décisions de conversation doivent également être enregistrées explicitement par un outil de checkpoint ; un MCP ne reçoit pas spontanément tous les messages du chat.
-- Gestion des conversations concurrentes : versions, identifiants d'opération, refus d'écrasement et verrou par tâche lorsque nécessaire. Si un résultat est incertain, le réconcilier avec le service concerné avant toute répétition. Ne pas promettre une exécution exactement une fois sans prise en charge effective du service distant.
-- Séparation entre consultation, tenue du journal et commandes métier. La création du connecteur ne doit ouvrir ni les écritures Firebase/WordPress, ni le passage en terminé, ni les dépenses. Les règles d'accès doivent être appliquées côté serveur, pas seulement expliquées dans un texte.
-- Installation et authentification à vérifier sur chaque environnement client visé. Ne pas promettre une sélection/connexion spontanée dans chaque nouvelle conversation, ni une lecture exhaustive instantanée, ni l'archivage automatique des messages par le seul MCP.
-
-Statut historique après cette clarification : besoin documenté ; serveur MCP dédié non déployé ; aucun nouvel accès, secret, hébergement ou budget créé. Les fichiers `REPRISE.md` et `AGENTS.md` étaient la base documentaire, pas le connecteur lui-même.
-
-### 30 septembre 2026 — réalisation de la V1 du connecteur
-
-Ajout de `robot/mcp/server.py`, de 75 tests, d'un installateur Mac, d'une procédure de reprise et de documentation. La base privée du futur serveur est séparée du dépôt public. Sources testées comparées aux blobs GitHub. Aucun code historique du robot ni workflow modifié. Installation sur le Mac, tunnel dédié, accès réseau réel du serveur et connexion ChatGPT restent non exécutés ; le détail fait foi dans `robot/mcp/ETAT_INSTALLATION.md`.
+Aucun site, statut, règle Firebase ou réglage du robot historique n'a été modifié par la mise en place du connecteur.
