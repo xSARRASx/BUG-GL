@@ -156,26 +156,153 @@
   }
 
   // -------------------------------------------------------
-  //  Panneau revenus (50 € par site terminé)
+  //  Suivi des revenus et des encaissements
   // -------------------------------------------------------
+  //  Chaque site terminé vaut TARIF_DEFAUT, sauf si un montant
+  //  particulier a été saisi sur la fiche. Le paiement se suit site
+  //  par site : « payé » signifie encaissé, pas seulement facturé.
+
+  const TARIF_DEFAUT = 50;
+  const MOIS_FR = ["janvier", "février", "mars", "avril", "mai", "juin",
+                   "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+  /** Montant facturé pour un site. */
+  function montantDe(s) {
+    const m = Number(s && s.montant);
+    return Number.isFinite(m) && m >= 0 ? m : TARIF_DEFAUT;
+  }
+
+  const estPaye = (s) => Boolean(s && s.paye);
+
+  function euros(n) {
+    const v = Number(n) || 0;
+    const entier = Math.abs(v % 1) < 0.005;
+    return v.toLocaleString("fr-FR", {
+      minimumFractionDigits: entier ? 0 : 2,
+      maximumFractionDigits: 2,
+    }) + " €";
+  }
+
+  function libelleMois(idx) {
+    const y = Math.floor(idx / 12), m = idx % 12;
+    return `${MOIS_FR[m]} ${y}`;
+  }
+
+  function dateCourte(ts) {
+    if (!ts) return "";
+    return new Date(ts).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  }
+
+  /** Sites terminés sur une plage de mois, groupés par mois. */
+  function termineSurPeriode(lo, hi) {
+    return Object.values(sites)
+      .filter((s) => s.statut === "termine")
+      .map((s) => ({ site: s, mois: termineIndex(s) }))
+      .filter((e) => e.mois >= lo && e.mois <= hi);
+  }
+
   function renderRevenue() {
     const from = revFrom != null ? revFrom : currentIndex();
     const to   = revTo   != null ? revTo   : currentIndex();
     const lo = Math.min(from, to), hi = Math.max(from, to);
-    let count = 0;
-    Object.values(sites).forEach((s) => {
-      if (s.statut !== "termine") return;
-      const idx = termineIndex(s);
-      if (idx >= lo && idx <= hi) count++;
-    });
-    $("#rev-total").textContent = (count * 50) + " €";
-    $("#rev-count").textContent = count;
+
+    const entrees = termineSurPeriode(lo, hi);
+
+    let facture = 0, encaisse = 0;
+    const parMois = new Map();
+
+    for (const { site, mois } of entrees) {
+      const m = montantDe(site);
+      const paye = estPaye(site);
+      facture += m;
+      if (paye) encaisse += m;
+
+      const bloc = parMois.get(mois) || { sites: 0, facture: 0, encaisse: 0 };
+      bloc.sites += 1;
+      bloc.facture += m;
+      if (paye) bloc.encaisse += m;
+      parMois.set(mois, bloc);
+    }
+
+    const reste = facture - encaisse;
+    const pct = facture > 0 ? (encaisse / facture) * 100 : 0;
+
+    $("#rev-total").textContent = euros(facture);
+    $("#rev-encaisse").textContent = euros(encaisse);
+    $("#rev-reste").textContent = euros(reste);
+    $("#rev-count").textContent = entrees.length;
+
+    $("#rev-jauge").style.width = pct + "%";
+    $("#rev-jauge-lbl").textContent = facture > 0
+      ? `${pct.toFixed(pct % 1 === 0 ? 0 : 1)} % encaissé sur la période`
+      : "Aucun site terminé sur cette période.";
+
+    // --- Rappel des sites non encaissés ---
+    const impayes = entrees.filter((e) => !estPaye(e.site))
+      .sort((a, b) => a.mois - b.mois);
+    const boite = $("#rev-impayes");
+    if (impayes.length === 0) {
+      boite.classList.add("hidden");
+      boite.innerHTML = "";
+    } else {
+      boite.classList.remove("hidden");
+      boite.innerHTML = `
+        <div class="imp-titre">⏳ ${impayes.length} site${impayes.length > 1 ? "s" : ""} terminé${impayes.length > 1 ? "s" : ""} mais pas encore encaissé${impayes.length > 1 ? "s" : ""} — ${euros(reste)}</div>
+        <ul>
+          ${impayes.map(({ site, mois }) => `
+            <li>
+              <a href="#" onclick="event.preventDefault();window._seoDetail('${escapeHtml(site.id)}')">${escapeHtml(site.nom || "Sans nom")}</a>
+              — ${euros(montantDe(site))} · terminé en ${libelleMois(mois)}
+            </li>`).join("")}
+        </ul>`;
+    }
+
+    // --- Tableau mois par mois ---
+    const moisTries = [...parMois.keys()].sort((a, b) => b - a);
+    const table = $("#rev-mois");
+    if (moisTries.length === 0) {
+      table.innerHTML = `<tbody><tr><td class="mois-vide">Aucun site terminé sur cette période.</td></tr></tbody>`;
+    } else {
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th>Mois</th>
+            <th class="num">Sites</th>
+            <th class="num">Facturé</th>
+            <th class="num">Encaissé</th>
+            <th class="num">Reste</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${moisTries.map((m) => {
+            const b = parMois.get(m);
+            const r = b.facture - b.encaisse;
+            return `
+              <tr>
+                <td class="m-nom">${libelleMois(m)}</td>
+                <td class="num">${b.sites}</td>
+                <td class="num">${euros(b.facture)}</td>
+                <td class="num m-paye">${euros(b.encaisse)}</td>
+                <td class="num ${r > 0 ? "m-reste" : "m-solde"}">${r > 0 ? euros(r) : "soldé"}</td>
+              </tr>`;
+          }).join("")}
+          <tr class="total">
+            <td>Total</td>
+            <td class="num">${entrees.length}</td>
+            <td class="num">${euros(facture)}</td>
+            <td class="num m-paye">${euros(encaisse)}</td>
+            <td class="num ${reste > 0 ? "m-reste" : "m-solde"}">${reste > 0 ? euros(reste) : "soldé"}</td>
+          </tr>
+        </tbody>`;
+    }
   }
 
   function setRevenueRange(kind) {
     const now = new Date();
     if (kind === "mois") {
       revFrom = revTo = currentIndex();
+    } else if (kind === "moisdernier") {
+      revFrom = revTo = currentIndex() - 1;
     } else if (kind === "annee") {
       revFrom = now.getFullYear() * 12 + 0;
       revTo = currentIndex();
@@ -188,6 +315,19 @@
     $("#rev-to").value = indexToYm(revTo);
     renderRevenue();
   }
+
+  /** Bascule l'état d'encaissement d'un site. */
+  function basculerPaiement(id) {
+    const s = sites[id];
+    if (!s) return;
+    const devientPaye = !estPaye(s);
+    if (devientPaye) {
+      store.update(id, { paye: true, payeAt: Date.now(), updatedAt: Date.now(), updatedBy: me });
+    } else {
+      store.update(id, { paye: false, payeAt: null, updatedAt: Date.now(), updatedBy: me });
+    }
+  }
+  window._seoPaiement = basculerPaiement;
 
   // -------------------------------------------------------
   //  Stats (avec suivi mensuel)
@@ -262,6 +402,9 @@
             <div class="badges">
               <span class="badge activite-${s.activite}">${ACTIVITE_LABEL[s.activite] || ""}</span>
               <span class="badge ${s.carte === "oui" ? "carte-oui" : "carte-non"}">${s.carte === "oui" ? "✅ Carte G" : "❌ Sans Carte G"}</span>
+              ${s.statut === "termine"
+                ? `<span class="badge ${estPaye(s) ? "paye-oui" : "paye-non"}">${estPaye(s) ? "💶 Payé" : "⏳ À encaisser"} · ${euros(montantDe(s))}</span>`
+                : ""}
             </div>
             <span class="status-pill ${PILL_CLASS[s.statut] || "nontraite"}">${STATUT_LABEL[s.statut] || ""}</span>
           </div>
@@ -276,6 +419,9 @@
           <div class="card-actions">
             <button class="btn-card" onclick="event.stopPropagation();window._seoDetail('${s.id}')">👁 Voir</button>
             <button class="btn-card" onclick="event.stopPropagation();window._seoEdit('${s.id}')">✏️ Modifier</button>
+            ${s.statut === "termine"
+              ? `<button class="btn-card" onclick="event.stopPropagation();window._seoPaiement('${s.id}')">${estPaye(s) ? "↩️ Pas payé" : "💶 Marquer payé"}</button>`
+              : ""}
           </div>
         </div>
       `;
@@ -347,6 +493,24 @@
         </div>` : ""}
       ${s.gmb ? `<h4 class="detail-label">🗺️ Google My Business</h4><div class="detail-desc"><a href="${escapeHtml(s.gmb)}" target="_blank" rel="noopener" style="color:#a99bff">${escapeHtml(s.gmb)}</a></div>` : ""}
       ${s.drive ? `<h4 class="detail-label">🔗 Lien Drive / fichier</h4><div class="detail-desc"><a href="${escapeHtml(s.drive)}" target="_blank" rel="noopener" style="color:#a99bff">${escapeHtml(s.drive)}</a></div>` : ""}
+      ${s.statut === "termine" ? `
+        <h4 class="detail-label">💶 Facturation</h4>
+        <div class="paiement-box">
+          <div class="pb-etat">
+            <div class="pb-montant" style="color:${estPaye(s) ? "var(--green)" : "#ff8095"}">
+              ${euros(montantDe(s))} — ${estPaye(s) ? "encaissé" : "à encaisser"}
+            </div>
+            <div class="pb-date">
+              ${estPaye(s) && s.payeAt
+                ? "Marqué payé le " + dateCourte(s.payeAt)
+                : "Terminé en " + libelleMois(termineIndex(s))}
+            </div>
+          </div>
+          <button class="btn ${estPaye(s) ? "btn-ghost" : "btn-primary"}"
+                  onclick="window._seoPaiement('${escapeHtml(s.id)}')">
+            ${estPaye(s) ? "↩️ Marquer non payé" : "💶 Marquer payé"}
+          </button>
+        </div>` : ""}
       ${s.note ? `<h4 class="detail-label">📝 Note</h4><div class="detail-desc">${escapeHtml(s.note)}</div>` : ""}
       ${files.length ? `
         <h4 class="detail-label">📎 Fichiers joints</h4>
@@ -436,6 +600,8 @@
     $("#f-gmb").value   = isEdit ? (site.gmb    || "") : "";
     $("#f-drive").value = isEdit ? (site.drive  || "") : "";
     $("#f-note").value  = isEdit ? (site.note   || "") : "";
+    $("#f-montant").value = isEdit ? (site.montant === 0 || site.montant ? site.montant : TARIF_DEFAUT) : TARIF_DEFAUT;
+    $("#f-paye").checked = isEdit ? Boolean(site.paye) : false;
     // Champs obligatoires + leurs cases « Rien à remplir »
     REQ_FIELDS.forEach((f) => {
       $("#" + f.id).value = isEdit ? (site[f.key] || "") : "";
@@ -502,6 +668,8 @@
       gmb:      $("#f-gmb").value.trim(),
       drive:    $("#f-drive").value.trim(),
       note:     $("#f-note").value.trim(),
+      montant:  (() => { const v = parseFloat($("#f-montant").value); return Number.isFinite(v) && v >= 0 ? v : TARIF_DEFAUT; })(),
+      paye:     $("#f-paye").checked,
       files:    editingFiles.reduce((acc, f) => { acc[f.id] = f; return acc; }, {}),
       updatedAt: Date.now(),
       updatedBy: me,
@@ -544,6 +712,12 @@
       );
       if (!go) { $("#f-google").focus(); return; }
     }
+
+    // Date d'encaissement : posée au moment où la case est cochée,
+    // effacée si on la décoche.
+    const avant = id ? sites[id] : null;
+    if (data.paye && !(avant && avant.paye)) data.payeAt = Date.now();
+    if (!data.paye) data.payeAt = null;
 
     if (id) {
       const wasTermine = sites[id] && sites[id].statut === "termine";

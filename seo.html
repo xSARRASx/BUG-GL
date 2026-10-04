@@ -94,7 +94,65 @@
       padding-top: 16px; border-top: 1px solid var(--border);
     }
     .revenue-result .rr-num { font-size: 26px; font-weight: 800; color: #a99bff; }
+    .revenue-result .rr-num.rr-paye  { color: var(--green); }
+    .revenue-result .rr-num.rr-reste { color: #ff8095; }
     .revenue-result .rr-lbl { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+
+    /* --- Jauge d'encaissement --- */
+    .jauge-paiement {
+      height: 9px; border-radius: 99px; background: rgba(154,160,189,0.16);
+      overflow: hidden; margin-top: 16px;
+    }
+    .jauge-paiement > span {
+      display: block; height: 100%; border-radius: 99px;
+      background: linear-gradient(90deg, #2ecc8f, #23a877); transition: width .35s;
+    }
+    .jauge-lbl { font-size: 12px; color: var(--muted); font-weight: 600; margin-top: 7px; }
+
+    /* --- Rappel des impayés --- */
+    .impayes {
+      margin-top: 16px; padding: 12px 14px; border-radius: 10px; font-size: 13.5px;
+      background: rgba(255,92,122,0.08); border: 1px solid rgba(255,92,122,0.35);
+      line-height: 1.7;
+    }
+    .impayes .imp-titre { font-weight: 700; color: #ff8095; margin-bottom: 6px; }
+    .impayes ul { margin: 0; padding-left: 18px; }
+    .impayes a { color: #a99bff; text-decoration: none; }
+    .impayes a:hover { text-decoration: underline; }
+
+    /* --- Tableau mois par mois --- */
+    .mois-detail { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .mois-titre {
+      font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--muted); font-weight: 700; margin-bottom: 10px;
+    }
+    .mois-table-wrap { overflow-x: auto; }
+    .mois-table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 460px; }
+    .mois-table th {
+      text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted); font-weight: 700; padding: 7px 10px; border-bottom: 1px solid var(--border);
+    }
+    .mois-table th.num, .mois-table td.num { text-align: right; }
+    .mois-table td { padding: 8px 10px; border-bottom: 1px solid rgba(154,160,189,0.1); }
+    .mois-table tbody tr:last-child td { border-bottom: none; }
+    .mois-table tr.total td { font-weight: 800; border-top: 1px solid var(--border); background: rgba(108,92,231,0.07); }
+    .mois-table .m-nom { font-weight: 600; text-transform: capitalize; }
+    .mois-table .m-paye { color: var(--green); font-weight: 700; }
+    .mois-table .m-reste { color: #ff8095; font-weight: 700; }
+    .mois-table .m-solde { color: var(--green); font-weight: 700; }
+    .mois-vide { color: var(--muted); font-style: italic; font-size: 13px; padding: 8px 10px; }
+
+    /* --- Paiement : badges et actions --- */
+    .badge.paye-oui { background: rgba(46,204,143,0.16); color: var(--green); }
+    .badge.paye-non { background: rgba(255,92,122,0.14); color: #ff8095; }
+    .paiement-box {
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 16px; margin-bottom: 22px; display: flex; align-items: center;
+      gap: 14px; flex-wrap: wrap; font-size: 14px;
+    }
+    .paiement-box .pb-etat { flex: 1; min-width: 180px; }
+    .paiement-box .pb-montant { font-size: 20px; font-weight: 800; }
+    .paiement-box .pb-date { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 
     /* --- Écran accès refusé --- */
     .access-screen {
@@ -234,7 +292,7 @@
 
     <!-- Panneau revenus -->
     <section class="revenue-panel" id="revenue-panel">
-      <h3>💰 Mes revenus (50 € par site terminé)</h3>
+      <h3>💰 Mon suivi — ce que j'ai fait et ce qui est encaissé</h3>
       <div class="revenue-controls">
         <div class="rc">
           <label for="rev-from">Du (mois)</label>
@@ -246,13 +304,41 @@
         </div>
         <div class="revenue-quick">
           <button class="chip" data-range="mois">Ce mois</button>
+          <button class="chip" data-range="moisdernier">Mois dernier</button>
           <button class="chip" data-range="annee">Cette année</button>
           <button class="chip" data-range="tout">Tout</button>
         </div>
       </div>
+
       <div class="revenue-result">
-        <div><div class="rr-num" id="rev-total">0 €</div><div class="rr-lbl">Revenus sur la période</div></div>
-        <div><div class="rr-num" id="rev-count">0</div><div class="rr-lbl">Sites terminés sur la période</div></div>
+        <div>
+          <div class="rr-num" id="rev-total">0 €</div>
+          <div class="rr-lbl">Total facturé</div>
+        </div>
+        <div>
+          <div class="rr-num rr-paye" id="rev-encaisse">0 €</div>
+          <div class="rr-lbl">Déjà encaissé</div>
+        </div>
+        <div>
+          <div class="rr-num rr-reste" id="rev-reste">0 €</div>
+          <div class="rr-lbl">Reste à encaisser</div>
+        </div>
+        <div>
+          <div class="rr-num" id="rev-count">0</div>
+          <div class="rr-lbl">Sites terminés</div>
+        </div>
+      </div>
+
+      <div class="jauge-paiement"><span id="rev-jauge" style="width:0%"></span></div>
+      <div class="jauge-lbl" id="rev-jauge-lbl"></div>
+
+      <div id="rev-impayes" class="impayes hidden"></div>
+
+      <div class="mois-detail">
+        <div class="mois-titre">Détail mois par mois</div>
+        <div class="mois-table-wrap">
+          <table class="mois-table" id="rev-mois"></table>
+        </div>
       </div>
     </section>
 
@@ -429,6 +515,24 @@
           </div>
         </div>
 
+        <div class="req-box" style="background:rgba(46,204,143,0.06);border-color:rgba(46,204,143,0.35)">
+          <div class="req-box-title">💶 Facturation <span class="req-hint">— sert au suivi de tes revenus</span></div>
+          <div class="field-row">
+            <div class="field">
+              <label for="f-montant">Montant facturé (€)</label>
+              <input type="number" id="f-montant" step="1" min="0" placeholder="50" />
+              <small class="hint">Par défaut 50 € par site terminé. À changer seulement si ce site a un tarif différent.</small>
+            </div>
+            <div class="field">
+              <label>Encaissement</label>
+              <label class="na-check" style="margin-top:4px">
+                <input type="checkbox" id="f-paye" /> 💶 Déjà payé
+              </label>
+              <small class="hint">Ne compte dans « encaissé » que si le site est au statut « Terminé ».</small>
+            </div>
+          </div>
+        </div>
+
         <div class="field">
           <label for="f-note">📝 Note libre</label>
           <textarea id="f-note" rows="4" placeholder="Avancement, points en attente, mots-clés, remarques…"></textarea>
@@ -498,7 +602,7 @@
     </div>
   </div>
 
-  <script src="js/firebase-config.js?v=23"></script>
-  <script src="js/seo.js?v=23"></script>
+  <script src="js/firebase-config.js?v=24"></script>
+  <script src="js/seo.js?v=24"></script>
 </body>
 </html>
