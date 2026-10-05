@@ -155,6 +155,14 @@
     return dateToIndex(s.termineAt || s.updatedAt || s.createdAt || Date.now());
   }
 
+  // Mois auquel le site est COMPTÉ dans le suivi : le mois de
+  // rattachement choisi à la main s'il existe (ex. un SEO de septembre
+  // fini en octobre), sinon le mois où il a été terminé.
+  function moisComptable(s) {
+    const choisi = ymToIndex(s && s.moisFacturation);
+    return choisi != null ? choisi : termineIndex(s);
+  }
+
   // -------------------------------------------------------
   //  Suivi des revenus et des encaissements
   // -------------------------------------------------------
@@ -197,7 +205,7 @@
   function termineSurPeriode(lo, hi) {
     return Object.values(sites)
       .filter((s) => s.statut === "termine")
-      .map((s) => ({ site: s, mois: termineIndex(s) }))
+      .map((s) => ({ site: s, mois: moisComptable(s) }))
       .filter((e) => e.mois >= lo && e.mois <= hi);
   }
 
@@ -308,7 +316,7 @@
       revTo = currentIndex();
     } else if (kind === "tout") {
       let min = currentIndex();
-      Object.values(sites).forEach((s) => { if (s.statut === "termine") { const i = termineIndex(s); if (i < min) min = i; } });
+      Object.values(sites).forEach((s) => { if (s.statut === "termine") { const i = moisComptable(s); if (i < min) min = i; } });
       revFrom = min; revTo = currentIndex();
     }
     $("#rev-from").value = indexToYm(revFrom);
@@ -504,6 +512,9 @@
               ${estPaye(s) && s.payeAt
                 ? "Marqué payé le " + dateCourte(s.payeAt)
                 : "Terminé en " + libelleMois(termineIndex(s))}
+              ${moisComptable(s) !== termineIndex(s)
+                ? `<br>📅 Compté en <b>${libelleMois(moisComptable(s))}</b> (rattachement manuel)`
+                : ""}
             </div>
           </div>
           <button class="btn ${estPaye(s) ? "btn-ghost" : "btn-primary"}"
@@ -602,6 +613,7 @@
     $("#f-note").value  = isEdit ? (site.note   || "") : "";
     $("#f-montant").value = isEdit ? (site.montant === 0 || site.montant ? site.montant : TARIF_DEFAUT) : TARIF_DEFAUT;
     $("#f-paye").checked = isEdit ? Boolean(site.paye) : false;
+    $("#f-mois-fact").value = isEdit && site.moisFacturation ? site.moisFacturation : "";
     // Champs obligatoires + leurs cases « Rien à remplir »
     REQ_FIELDS.forEach((f) => {
       $("#" + f.id).value = isEdit ? (site[f.key] || "") : "";
@@ -670,6 +682,8 @@
       note:     $("#f-note").value.trim(),
       montant:  (() => { const v = parseFloat($("#f-montant").value); return Number.isFinite(v) && v >= 0 ? v : TARIF_DEFAUT; })(),
       paye:     $("#f-paye").checked,
+      // Vide = compté au mois où le site est terminé.
+      moisFacturation: /^\d{4}-\d{2}$/.test($("#f-mois-fact").value) ? $("#f-mois-fact").value : null,
       files:    editingFiles.reduce((acc, f) => { acc[f.id] = f; return acc; }, {}),
       updatedAt: Date.now(),
       updatedBy: me,
