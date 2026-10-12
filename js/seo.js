@@ -191,6 +191,12 @@
     }) + " €";
   }
 
+  /** Date lisible, ex. « 3 oct. 2026 ». */
+  function dateLisible(ts) {
+    if (!ts) return null;
+    return new Date(ts).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+  }
+
   function libelleMois(idx) {
     const y = Math.floor(idx / 12), m = idx % 12;
     return `${MOIS_FR[m]} ${y}`;
@@ -419,6 +425,10 @@
           <h3>${escapeHtml(s.nom || "")}</h3>
           ${s.url ? `<div class="card-url"><a href="${escapeHtml(s.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🌐 ${escapeHtml(s.url)}</a></div>` : ""}
           ${s.ville ? `<div class="card-ville">📍 ${escapeHtml(s.ville)}</div>` : ""}
+          <div class="card-dates">
+            ${s.createdAt ? `📥 Posté le ${dateLisible(s.createdAt)}${s.createdBy ? " par " + escapeHtml(s.createdBy) : ""}` : ""}
+            ${s.statut === "termine" && s.termineAt ? `<br>✅ Fini le ${dateLisible(s.termineAt)}` : ""}
+          </div>
           ${s.note ? `<div class="seo-note">${escapeHtml(s.note)}</div>` : ""}
           <div class="card-foot">
             <span>${s.email ? `<a href="mailto:${escapeHtml(s.email)}" onclick="event.stopPropagation()">✉️ ${escapeHtml(s.email)}</a>` : ""}</span>
@@ -471,9 +481,6 @@
     if (!s) return;
     detailSiteId = id;
     const files = s.files ? Object.values(s.files) : [];
-    const date = s.createdAt
-      ? new Date(s.createdAt).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
-      : "";
 
     $("#detail-title").textContent = s.nom || "Site";
     $("#detail-body").innerHTML = `
@@ -534,7 +541,14 @@
             </div>
           `).join("")}
         </div>` : ""}
-      <div class="detail-meta">${s.createdBy ? "Ajouté par " + escapeHtml(s.createdBy) : ""}${date ? " · le " + date : ""}</div>
+      <h4 class="detail-label">📆 Dates</h4>
+      <div class="detail-desc">
+        📥 Posté le <b>${dateLisible(s.createdAt) || "date inconnue"}</b>${s.createdBy ? " par " + escapeHtml(s.createdBy) : ""}<br>
+        ✅ Passé en fini : <b>${s.statut === "termine" && s.termineAt ? dateLisible(s.termineAt) : "pas encore"}</b>
+        ${s.statut === "termine" && s.termineAt && s.createdAt
+          ? ` <span style="color:var(--muted)">(${Math.max(0, Math.round((s.termineAt - s.createdAt) / 86400000))} jour(s) après)</span>`
+          : ""}
+      </div>
     `;
 
     // Boutons de statut rapides
