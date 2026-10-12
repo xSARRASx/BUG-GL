@@ -191,6 +191,20 @@
     }) + " €";
   }
 
+  /** Timestamp → valeur d'un <input type="date"> (AAAA-MM-JJ, heure locale). */
+  function versChampDate(ts) {
+    if (!ts) return "";
+    const d = new Date(ts);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  /** Valeur d'un <input type="date"> → timestamp à midi local (évite les décalages de fuseau). */
+  function depuisChampDate(v) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || "");
+    if (!m) return null;
+    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0).getTime();
+  }
+
   /** Date lisible, ex. « 3 oct. 2026 ». */
   function dateLisible(ts) {
     if (!ts) return null;
@@ -428,6 +442,7 @@
           <div class="card-dates">
             ${s.createdAt ? `📥 Posté le ${dateLisible(s.createdAt)}${s.createdBy ? " par " + escapeHtml(s.createdBy) : ""}` : ""}
             ${s.statut === "termine" && s.termineAt ? `<br>✅ Fini le ${dateLisible(s.termineAt)}` : ""}
+            ${s.statut === "termine" ? `<br>💶 Facturé sur <b>${libelleMois(moisComptable(s))}</b>` : ""}
           </div>
           ${s.note ? `<div class="seo-note">${escapeHtml(s.note)}</div>` : ""}
           <div class="card-foot">
@@ -628,6 +643,8 @@
     $("#f-montant").value = isEdit ? (site.montant === 0 || site.montant ? site.montant : TARIF_DEFAUT) : TARIF_DEFAUT;
     $("#f-paye").checked = isEdit ? Boolean(site.paye) : false;
     $("#f-mois-fact").value = isEdit && site.moisFacturation ? site.moisFacturation : "";
+    $("#f-date-poste").value = isEdit ? versChampDate(site.createdAt) : "";
+    $("#f-date-fini").value = isEdit ? versChampDate(site.termineAt) : "";
     // Champs obligatoires + leurs cases « Rien à remplir »
     REQ_FIELDS.forEach((f) => {
       $("#" + f.id).value = isEdit ? (site[f.key] || "") : "";
@@ -747,15 +764,21 @@
     if (data.paye && !(avant && avant.paye)) data.payeAt = Date.now();
     if (!data.paye) data.payeAt = null;
 
+    // Dates modifiables à la main (Martin et Camille). Vide = automatique.
+    const posteSaisi = depuisChampDate($("#f-date-poste").value);
+    const finiSaisi = depuisChampDate($("#f-date-fini").value);
+
     if (id) {
       const wasTermine = sites[id] && sites[id].statut === "termine";
       // Mémorise la date de passage en « terminé » (sert au calcul des revenus)
       if (data.statut === "termine" && !wasTermine) data.termineAt = Date.now();
+      if (data.statut === "termine" && finiSaisi) data.termineAt = finiSaisi;
       if (data.statut !== "termine") data.termineAt = null;
+      if (posteSaisi) data.createdAt = posteSaisi;
       store.update(id, data);
     } else {
-      if (data.statut === "termine") data.termineAt = Date.now();
-      store.add({ ...data, createdAt: Date.now(), createdBy: me });
+      if (data.statut === "termine") data.termineAt = finiSaisi || Date.now();
+      store.add({ ...data, createdAt: posteSaisi || Date.now(), createdBy: me });
     }
     closeModal();
   }

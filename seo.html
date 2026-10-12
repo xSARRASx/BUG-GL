@@ -532,6 +532,17 @@
               <small class="hint">Ne compte dans « encaissé » que si le site est au statut « Terminé ».</small>
             </div>
           </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="f-date-poste">📥 Posté le</label>
+              <input type="date" id="f-date-poste" />
+            </div>
+            <div class="field">
+              <label for="f-date-fini">✅ Fini le</label>
+              <input type="date" id="f-date-fini" />
+            </div>
+          </div>
+          <small class="hint" style="display:block;margin:-6px 0 12px">Remplies automatiquement. Corrige-les si besoin ; « Fini le » n'est pris en compte que si le site est au statut Terminé.</small>
           <div class="field">
             <label for="f-mois-fact">📅 Mois auquel ce SEO appartient <span class="optional">(optionnel)</span></label>
             <input type="month" id="f-mois-fact" />
@@ -609,6 +620,6 @@
   </div>
 
   <script src="js/firebase-config.js?v=24"></script>
-  <script src="js/seo.js?v=26"></script>
+  <script src="js/seo.js?v=27"></script>
 </body>
 </html>
